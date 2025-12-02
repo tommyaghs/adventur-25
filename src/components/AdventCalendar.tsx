@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import jsPDF from 'jspdf';
 // @ts-ignore - qrcode non ha tipi TypeScript completi
 import QRCode from 'qrcode';
-import { getUserIP, hasAttemptedToday, recordAttempt, isBackendConfigured, verifyBackendStatus, initializeGitHubBackend, setTemporaryGitHubToken } from '../services/ipService';
+import { getUserIP, hasAttemptedToday, recordAttempt, isBackendConfigured, verifyBackendStatus, initializeGitHubBackend } from '../services/ipService';
 
 interface Message {
   [key: number]: string;
@@ -526,17 +526,15 @@ const AdventCalendar: React.FC = () => {
       }
       setInitializing(true);
       try {
-        // Salva il token in localStorage per permettere l'uso immediato
-        setTemporaryGitHubToken(initToken.trim());
-        // Inizializza il backend (salva anche il token se non è già in env)
-        const gistId = await initializeGitHubBackend(initToken.trim(), true);
-        alert(`Backend inizializzato con successo!\nGist ID: ${gistId}\n\nIl token è stato salvato temporaneamente in localStorage per permettere l'uso immediato.\n⚠️ Per produzione, configura VITE_GITHUB_TOKEN come variabile d'ambiente.`);
+        // Inizializza il backend usando il token fornito
+        const gistId = await initializeGitHubBackend(initToken.trim());
+        alert(`✅ Backend inizializzato con successo!\n\nGist ID: ${gistId}\n\n⚠️ IMPORTANTE: Il token deve essere configurato come variabile d'ambiente VITE_GITHUB_TOKEN nel file .env (sviluppo) o come GitHub Secret (produzione).`);
         setInitToken('');
         // Verifica automaticamente dopo l'inizializzazione
         await handleCheckBackend();
       } catch (error) {
         console.error('Errore nell\'inizializzazione:', error);
-        alert(`Errore nell'inizializzazione: ${error instanceof Error ? error.message : 'Errore sconosciuto'}`);
+        alert(`❌ Errore nell'inizializzazione:\n${error instanceof Error ? error.message : 'Errore sconosciuto'}\n\nVerifica che il token sia valido e abbia i permessi 'gist'.`);
       } finally {
         setInitializing(false);
       }
@@ -703,22 +701,6 @@ const AdventCalendar: React.FC = () => {
                     <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
                       <h4 className="font-bold mb-2">🔧 Inizializza Backend</h4>
                       
-                      <div className="mb-4 p-3 bg-white rounded border border-blue-300">
-                        <h5 className="font-bold text-sm mb-2">📝 Come ottenere il Token GitHub:</h5>
-                        <ol className="text-xs text-gray-700 space-y-1 list-decimal list-inside">
-                          <li>Vai su <a href="https://github.com/settings/tokens" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">https://github.com/settings/tokens</a></li>
-                          <li>Clicca su <strong>"Generate new token"</strong> → <strong>"Generate new token (classic)"</strong></li>
-                          <li>Dai un nome (es. "Advent Calendar Backend")</li>
-                          <li>Seleziona la scadenza (consigliato: 90 giorni o No expiration)</li>
-                          <li>Seleziona SOLO il permesso <strong>"gist"</strong> ✅</li>
-                          <li>Clicca <strong>"Generate token"</strong></li>
-                          <li><strong>COPIA IL TOKEN</strong> (lo vedrai solo una volta!)</li>
-                        </ol>
-                      </div>
-
-                      <p className="text-xs text-gray-600 mb-3">
-                        Incolla il token qui per inizializzare il backend. Il token verrà salvato temporaneamente in localStorage.
-                      </p>
                       <div className="flex flex-col sm:flex-row gap-2">
                         <input
                           type="password"
@@ -737,12 +719,15 @@ const AdventCalendar: React.FC = () => {
                       </div>
                       <div className="mt-3 p-2 bg-yellow-50 rounded border border-yellow-300">
                         <p className="text-xs text-yellow-800">
-                          <strong>⚠️ Nota Sicurezza:</strong> Il token sarà visibile nel codice client-side. 
-                          Usa SOLO token con permessi limitati ai Gists. Non usare il tuo token principale.
+                          <strong>⚠️ IMPORTANTE:</strong> Questo form serve solo per creare il Gist iniziale. 
+                          Il token deve essere configurato come variabile d'ambiente <code>VITE_GITHUB_TOKEN</code>:
                         </p>
+                        <ul className="text-xs text-yellow-800 mt-1 list-disc list-inside space-y-1">
+                          <li><strong>Sviluppo locale:</strong> File <code>.env</code> con <code>VITE_GITHUB_TOKEN=il_tuo_token</code></li>
+                          <li><strong>Produzione:</strong> GitHub Secret <code>VITE_GITHUB_TOKEN</code> nel repository</li>
+                        </ul>
                         <p className="text-xs text-yellow-800 mt-1">
-                          <strong>💡 Per produzione:</strong> Configura VITE_GITHUB_TOKEN come variabile d'ambiente nel file <code>.env</code> 
-                          (sviluppo) o come GitHub Secret (produzione).
+                          <strong>🔒 Sicurezza:</strong> Il token sarà visibile nel codice client-side. Usa SOLO token con permessi limitati ai Gists.
                         </p>
                       </div>
                     </div>
