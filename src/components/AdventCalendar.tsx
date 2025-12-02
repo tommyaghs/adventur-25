@@ -230,7 +230,21 @@ const AdventCalendar: React.FC = () => {
     // Reset errori precedenti
     setAttemptLimitError(null);
 
-    // Verifica se l'IP è disponibile
+    // Controllo base sincrono: se già aperto o giorno futuro, blocca subito
+    if (!canOpenSync(day)) {
+      return;
+    }
+
+    // Apri la modale IMMEDIATAMENTE per migliorare l'UX
+    // Genera il risultato subito (senza aspettare i controlli backend)
+    const result: Prize = generateResult(day);
+    setDayResults(prev => ({ ...prev, [day]: result }));
+    setSelectedDay(day);
+    setIsRevealed(false);
+    setIsCanvasReady(false);
+    setShowConfetti(false);
+
+    // Verifica se l'IP è disponibile (controllo rapido)
     if (!userIP) {
       if (ipCheckLoading) {
         setAttemptLimitError('Attendere il caricamento del sistema di sicurezza...');
@@ -240,51 +254,41 @@ const AdventCalendar: React.FC = () => {
       return;
     }
 
-    // Verifica se può aprire (incluso controllo IP)
-    const canOpenDay = await canOpen(day);
-    
-    if (!canOpenDay) {
-      // Verifica se è un problema di limitazione IP
-      try {
-        const hasAttempted = await hasAttemptedToday(userIP, day);
-        if (hasAttempted) {
-          setAttemptLimitError(`Hai già fatto un tentativo oggi per il giorno ${day}. Puoi riprovare domani!`);
-          return;
-        }
-      } catch (error) {
-        console.error('Errore nel controllo tentativi:', error);
-        setAttemptLimitError('Errore nel controllo dei tentativi. Riprova tra qualche secondo.');
-        return;
-      }
-      
-      // Altri motivi per cui non può aprire (già aperto, giorno futuro, ecc.)
-      return;
-    }
-
-    // Verifica se il token è configurato (il Gist viene creato automaticamente)
+    // Verifica se il token è configurato (controllo rapido)
     if (!isBackendConfigured()) {
       setAttemptLimitError('Token GitHub non configurato. Configura VITE_GITHUB_TOKEN nel file .env (sviluppo) o come GitHub Secret (produzione).');
       console.error('Token GitHub non configurato - tentativo bloccato');
       return;
     }
 
-    // Registra il tentativo PRIMA di generare il risultato
-    try {
-      await recordAttempt(userIP, day);
-    } catch (error) {
-      console.error('Errore nella registrazione del tentativo:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Errore sconosciuto';
-      setAttemptLimitError(`Errore nella registrazione del tentativo: ${errorMessage}. Il tentativo potrebbe non essere tracciato correttamente.`);
-      return;
-    }
+    // Controlli backend in background (non bloccano l'apertura della modale)
+    // Verifica se può aprire (incluso controllo IP)
+    canOpen(day).then(canOpenDay => {
+      if (!canOpenDay) {
+        // Verifica se è un problema di limitazione IP
+        hasAttemptedToday(userIP, day).then(hasAttempted => {
+          if (hasAttempted) {
+            setAttemptLimitError(`Hai già fatto un tentativo oggi per il giorno ${day}. Puoi riprovare domani!`);
+            // Chiudi la modale se ha già tentato
+            setSelectedDay(null);
+          }
+        }).catch(error => {
+          console.error('Errore nel controllo tentativi:', error);
+          setAttemptLimitError('Errore nel controllo dei tentativi. Riprova tra qualche secondo.');
+        });
+        return;
+      }
 
-    // Genera e mostra il risultato
-    const result: Prize = generateResult(day);
-    setDayResults(prev => ({ ...prev, [day]: result }));
-    setSelectedDay(day);
-    setIsRevealed(false);
-    setIsCanvasReady(false);
-    setShowConfetti(false);
+      // Registra il tentativo in background
+      recordAttempt(userIP, day).catch(error => {
+        console.error('Errore nella registrazione del tentativo:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Errore sconosciuto';
+        setAttemptLimitError(`Errore nella registrazione del tentativo: ${errorMessage}. Il tentativo potrebbe non essere tracciato correttamente.`);
+      });
+    }).catch(error => {
+      console.error('Errore nel controllo canOpen:', error);
+      setAttemptLimitError('Errore nel controllo dei permessi. Riprova tra qualche secondo.');
+    });
   };
 
   const initCanvas = (): void => {
