@@ -520,15 +520,20 @@ const AdventCalendar: React.FC = () => {
     };
 
     const handleInitializeBackend = async (): Promise<void> => {
-      if (!initToken.trim()) {
-        alert('Inserisci un token GitHub valido');
+      // Usa il token dalla variabile d'ambiente se disponibile, altrimenti usa quello inserito
+      const envToken = import.meta.env.VITE_GITHUB_TOKEN;
+      const tokenToUse = envToken || initToken.trim();
+      
+      if (!tokenToUse) {
+        alert('Token GitHub non trovato. Configura VITE_GITHUB_TOKEN nel file .env o inseriscilo nel campo.');
         return;
       }
+      
       setInitializing(true);
       try {
-        // Inizializza il backend usando il token fornito
-        const gistId = await initializeGitHubBackend(initToken.trim());
-        alert(`✅ Backend inizializzato con successo!\n\nGist ID: ${gistId}\n\n⚠️ IMPORTANTE: Il token deve essere configurato come variabile d'ambiente VITE_GITHUB_TOKEN nel file .env (sviluppo) o come GitHub Secret (produzione).`);
+        // Inizializza il backend usando il token
+        const gistId = await initializeGitHubBackend(tokenToUse);
+        alert(`✅ Backend inizializzato con successo!\n\nGist ID: ${gistId}\n\nIl backend è ora configurato e funzionante.`);
         setInitToken('');
         // Verifica automaticamente dopo l'inizializzazione
         await handleCheckBackend();
@@ -701,22 +706,42 @@ const AdventCalendar: React.FC = () => {
                     <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
                       <h4 className="font-bold mb-2">🔧 Inizializza Backend</h4>
                       
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        <input
-                          type="password"
-                          value={initToken}
-                          onChange={(e) => setInitToken(e.target.value)}
-                          placeholder="Incolla il tuo GitHub Token qui (ghp_...)"
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none text-sm"
-                        />
-                        <button
-                          onClick={handleInitializeBackend}
-                          disabled={initializing || !initToken.trim()}
-                          className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition font-bold disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                        >
-                          {initializing ? 'Inizializzazione...' : 'Inizializza'}
-                        </button>
-                      </div>
+                      {backendStatus.tokenPresent ? (
+                        <div className="mb-3">
+                          <p className="text-sm text-gray-700 mb-2">
+                            ✅ Token GitHub trovato nella variabile d'ambiente. Clicca il pulsante per creare il Gist.
+                          </p>
+                          <button
+                            onClick={handleInitializeBackend}
+                            disabled={initializing}
+                            className="bg-green-500 text-white px-6 py-2 rounded-lg hover:bg-green-600 transition font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {initializing ? 'Inizializzazione...' : '🚀 Inizializza Backend'}
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="mb-3">
+                          <p className="text-sm text-gray-700 mb-2">
+                            ⚠️ Token GitHub non trovato. Inserisci il token qui per inizializzare il backend.
+                          </p>
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            <input
+                              type="password"
+                              value={initToken}
+                              onChange={(e) => setInitToken(e.target.value)}
+                              placeholder="Incolla il tuo GitHub Token qui (ghp_...)"
+                              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none text-sm"
+                            />
+                            <button
+                              onClick={handleInitializeBackend}
+                              disabled={initializing || !initToken.trim()}
+                              className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition font-bold disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                            >
+                              {initializing ? 'Inizializzazione...' : 'Inizializza'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                       <div className="mt-3 p-2 bg-yellow-50 rounded border border-yellow-300">
                         <p className="text-xs text-yellow-800">
                           <strong>⚠️ IMPORTANTE:</strong> Questo form serve solo per creare il Gist iniziale. 
