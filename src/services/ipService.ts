@@ -393,7 +393,7 @@ export async function verifyBackendStatus(): Promise<{
  * Inizializza il backend GitHub creando un nuovo Gist
  * Richiede un GitHub Personal Access Token
  */
-export async function initializeGitHubBackend(githubToken: string, saveToLocalStorage: boolean = false): Promise<string> {
+export async function initializeGitHubBackend(githubToken: string): Promise<string> {
   try {
     const response = await fetch('https://api.github.com/gists', {
       method: 'POST',
