@@ -264,10 +264,10 @@ const AdventCalendar: React.FC = () => {
       return;
     }
 
-    // Verifica se il backend è configurato (importante per la sicurezza)
+    // Verifica se il token è configurato (il Gist viene creato automaticamente)
     if (!isBackendConfigured()) {
-      setAttemptLimitError('Sistema di sicurezza non configurato. Impossibile procedere con il tentativo.');
-      console.error('Backend GitHub non configurato - tentativo bloccato per sicurezza');
+      setAttemptLimitError('Token GitHub non configurato. Configura VITE_GITHUB_TOKEN nel file .env (sviluppo) o come GitHub Secret (produzione).');
+      console.error('Token GitHub non configurato - tentativo bloccato');
       return;
     }
 

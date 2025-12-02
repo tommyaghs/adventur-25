@@ -89,9 +89,9 @@ function getGitHubToken(): string | null {
  * Verifica se il backend GitHub è configurato e funzionante
  */
 export function isBackendConfigured(): boolean {
-  const gistId = localStorage.getItem('github_gist_id');
+  // Se c'è il token, il backend è configurato (il Gist viene creato automaticamente)
   const githubToken = getGitHubToken();
-  return !!(gistId && githubToken);
+  return !!githubToken;
 }
 
 /**
@@ -105,11 +105,11 @@ export async function hasAttemptedToday(ip: string, day: number): Promise<boolea
   
   // PRIORITÀ 1: Verifica SEMPRE sul backend GitHub PRIMA (fonte di verità)
   // Il backend è l'unica fonte affidabile che non può essere manipolata
-  const gistId = localStorage.getItem('github_gist_id');
   const githubToken = getGitHubToken();
   
-  if (gistId && githubToken) {
+  if (githubToken) {
     try {
+      // Il Gist viene creato automaticamente se non esiste
       const hasAttempted = await checkGitHubBackend(ip, today, day);
       if (hasAttempted) {
         // Aggiorna la cache locale per performance future
@@ -121,13 +121,11 @@ export async function hasAttemptedToday(ip: string, day: number): Promise<boolea
       return false;
     } catch (error) {
       console.error('Errore CRITICO nel controllo backend GitHub:', error);
-      // Se il backend fallisce, NON possiamo permettere il tentativo per sicurezza
-      // Usa la cache locale come ultimo fallback, ma è meno sicuro
-      // In produzione, dovresti bloccare il tentativo se il backend non risponde
+      // Se il backend fallisce, usa la cache locale come fallback
     }
   } else {
-    // Backend non configurato - usa solo cache locale (MENO SICURO)
-    console.warn('ATTENZIONE: Backend GitHub non configurato - usando solo cache locale (non sicuro)');
+    // Token non configurato - usa solo cache locale (MENO SICURO)
+    console.warn('ATTENZIONE: Token GitHub non configurato - usando solo cache locale (non sicuro)');
   }
 
   // FALLBACK: Controlla la cache locale (solo se backend non disponibile)
@@ -174,10 +172,10 @@ export async function recordAttempt(ip: string, day: number): Promise<void> {
   };
   
   // PRIORITÀ 1: Salva SEMPRE sul backend GitHub PRIMA (fonte di verità)
-  const gistId = localStorage.getItem('github_gist_id');
+  // Il Gist viene creato automaticamente se non esiste
   const githubToken = getGitHubToken();
   
-  if (gistId && githubToken) {
+  if (githubToken) {
     try {
       await saveToGitHubBackend(attempt);
       // Solo dopo il successo sul backend, aggiorna la cache locale
@@ -195,14 +193,11 @@ export async function recordAttempt(ip: string, day: number): Promise<void> {
       return; // Successo, esci
     } catch (error) {
       console.error('Errore CRITICO nel salvataggio su GitHub backend:', error);
-      // Se il backend fallisce, è un problema serio
-      // In produzione, dovresti bloccare il tentativo se il backend non risponde
-      // Per ora, salviamo in cache locale come fallback (MENO SICURO)
       throw new Error('Impossibile salvare il tentativo sul backend. Il tentativo potrebbe non essere tracciato correttamente.');
     }
   } else {
-    // Backend non configurato - usa solo cache locale (MENO SICURO)
-    console.warn('ATTENZIONE: Backend GitHub non configurato - usando solo cache locale (non sicuro)');
+    // Token non configurato - usa solo cache locale (MENO SICURO)
+    console.warn('ATTENZIONE: Token GitHub non configurato - usando solo cache locale (non sicuro)');
   }
 
   // FALLBACK: Se backend non configurato o fallito, salva solo in cache locale
@@ -223,10 +218,13 @@ export async function recordAttempt(ip: string, day: number): Promise<void> {
  * Usa GitHub Gists API per salvare i tentativi
  */
 async function checkGitHubBackend(ip: string, date: string, day: number): Promise<boolean> {
-  const gistId = localStorage.getItem('github_gist_id');
-  if (!gistId) {
-    throw new Error('Backend GitHub non configurato');
+  const githubToken = getGitHubToken();
+  if (!githubToken) {
+    throw new Error('Token GitHub non configurato');
   }
+
+  // Assicurati che il Gist esista (lo crea automaticamente se necessario)
+  const gistId = await ensureGistExists();
 
   try {
     // Leggi il gist (pubblico, non serve autenticazione per leggere)
@@ -262,17 +260,79 @@ async function checkGitHubBackend(ip: string, date: string, day: number): Promis
 }
 
 /**
+ * Crea automaticamente il Gist se non esiste
+ */
+async function ensureGistExists(): Promise<string> {
+  const githubToken = getGitHubToken();
+  if (!githubToken) {
+    throw new Error('Token GitHub non configurato');
+  }
+
+  // Controlla se esiste già un Gist ID salvato
+  let gistId = localStorage.getItem('github_gist_id');
+  
+  if (gistId) {
+    // Verifica che il Gist esista ancora
+    try {
+      const response = await fetch(`https://api.github.com/gists/${gistId}`, {
+        headers: {
+          'Authorization': `token ${githubToken}`,
+          'Accept': 'application/vnd.github.v3+json'
+        },
+        signal: AbortSignal.timeout(5000)
+      });
+      
+      if (response.ok) {
+        return gistId; // Gist esiste, ritorna l'ID
+      }
+    } catch (error) {
+      console.warn('Gist esistente non accessibile, ne creo uno nuovo:', error);
+    }
+  }
+
+  // Crea un nuovo Gist
+  const response = await fetch('https://api.github.com/gists', {
+    method: 'POST',
+    headers: {
+      'Authorization': `token ${githubToken}`,
+      'Accept': 'application/vnd.github.v3+json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      description: 'Advent Calendar Attempts Tracker',
+      public: false, // Gist privato
+      files: {
+        'README.md': {
+          content: '# Advent Calendar Attempts Tracker\n\nQuesto Gist traccia i tentativi giornalieri per IP.'
+        }
+      }
+    })
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Errore nella creazione del Gist');
+  }
+
+  const gist = await response.json();
+  localStorage.setItem('github_gist_id', gist.id);
+  console.log('✅ Gist creato automaticamente:', gist.id);
+  return gist.id;
+}
+
+/**
  * Salva un tentativo sul backend GitHub
- * Richiede un GitHub Personal Access Token configurato
+ * Crea automaticamente il Gist se non esiste
  */
 async function saveToGitHubBackend(attempt: AttemptRecord): Promise<void> {
-  const gistId = localStorage.getItem('github_gist_id');
   const githubToken = getGitHubToken();
   
-  if (!gistId || !githubToken) {
-    // Backend non configurato, usa solo localStorage
-    return;
+  if (!githubToken) {
+    throw new Error('Token GitHub non configurato');
   }
+
+  // Assicurati che il Gist esista (lo crea automaticamente se necessario)
+  const gistId = await ensureGistExists();
 
   try {
     // Leggi il gist esistente
@@ -336,7 +396,7 @@ export async function verifyBackendStatus(): Promise<{
   gistId?: string;
 }> {
   const githubToken = getGitHubToken();
-  const gistId = localStorage.getItem('github_gist_id');
+  let gistId = localStorage.getItem('github_gist_id');
   
   const result = {
     configured: false,
@@ -346,12 +406,24 @@ export async function verifyBackendStatus(): Promise<{
     gistId: gistId || undefined
   };
 
-  // Se manca token o Gist ID, non è configurato
-  if (!githubToken || !gistId) {
+  // Se manca il token, non è configurato
+  if (!githubToken) {
     return result;
   }
 
   result.configured = true;
+
+  // Se il Gist non esiste, prova a crearlo automaticamente
+  if (!gistId) {
+    try {
+      gistId = await ensureGistExists();
+      result.gistIdPresent = true;
+      result.gistId = gistId;
+    } catch (error) {
+      result.error = error instanceof Error ? error.message : 'Errore nella creazione del Gist';
+      return result;
+    }
+  }
 
   // Testa la connessione al backend
   try {
