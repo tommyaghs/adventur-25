@@ -92,6 +92,22 @@ export async function hasAttemptedToday(ip: string, day: number): Promise<boolea
     return true;
   }
 
+  // Verifica anche nei tentativi salvati per lo stesso IP oggi
+  const attemptsKey = `all_attempts_${today}`;
+  const existingAttempts = localStorage.getItem(attemptsKey);
+  if (existingAttempts) {
+    try {
+      const attempts: AttemptRecord[] = JSON.parse(existingAttempts);
+      const hasAttempted = attempts.some(attempt => attempt.ip === ip && attempt.day === day);
+      if (hasAttempted) {
+        localStorage.setItem(cacheKey, 'true');
+        return true;
+      }
+    } catch (error) {
+      console.warn('Errore nel parsing dei tentativi salvati:', error);
+    }
+  }
+
   // Verifica sul backend GitHub (se configurato)
   try {
     const hasAttempted = await checkGitHubBackend(ip, today, day);

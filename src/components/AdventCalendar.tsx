@@ -187,17 +187,26 @@ const AdventCalendar: React.FC = () => {
       return false;
     }
 
-    // Controllo limitazione IP: solo se l'IP è stato recuperato
-    if (userIP) {
-      try {
-        const hasAttempted = await hasAttemptedToday(userIP, day);
-        if (hasAttempted) {
-          return false;
-        }
-      } catch (error) {
-        console.error('Errore nel controllo tentativi:', error);
-        // In caso di errore, permette il tentativo (fallback)
+    // IMPORTANTE: Non permettere tentativi finché l'IP non è stato recuperato
+    if (!userIP) {
+      if (ipCheckLoading) {
+        // IP ancora in caricamento, aspetta
+        return false;
       }
+      // IP non disponibile, non permettere tentativi
+      return false;
+    }
+
+    // Controllo limitazione IP: sempre obbligatorio
+    try {
+      const hasAttempted = await hasAttemptedToday(userIP, day);
+      if (hasAttempted) {
+        return false;
+      }
+    } catch (error) {
+      console.error('Errore nel controllo tentativi:', error);
+      // In caso di errore, non permettere il tentativo per sicurezza
+      return false;
     }
 
     return true;
@@ -207,21 +216,31 @@ const AdventCalendar: React.FC = () => {
     // Reset errori precedenti
     setAttemptLimitError(null);
 
+    // Verifica se l'IP è disponibile
+    if (!userIP) {
+      if (ipCheckLoading) {
+        setAttemptLimitError('Attendere il caricamento del sistema di sicurezza...');
+        return;
+      }
+      setAttemptLimitError('Impossibile verificare l\'identità. Riprova tra qualche secondo.');
+      return;
+    }
+
     // Verifica se può aprire (incluso controllo IP)
     const canOpenDay = await canOpen(day);
     
     if (!canOpenDay) {
       // Verifica se è un problema di limitazione IP
-      if (userIP) {
-        try {
-          const hasAttempted = await hasAttemptedToday(userIP, day);
-          if (hasAttempted) {
-            setAttemptLimitError(`Hai già fatto un tentativo oggi per il giorno ${day}. Puoi riprovare domani!`);
-            return;
-          }
-        } catch (error) {
-          console.error('Errore nel controllo tentativi:', error);
+      try {
+        const hasAttempted = await hasAttemptedToday(userIP, day);
+        if (hasAttempted) {
+          setAttemptLimitError(`Hai già fatto un tentativo oggi per il giorno ${day}. Puoi riprovare domani!`);
+          return;
         }
+      } catch (error) {
+        console.error('Errore nel controllo tentativi:', error);
+        setAttemptLimitError('Errore nel controllo dei tentativi. Riprova tra qualche secondo.');
+        return;
       }
       
       // Altri motivi per cui non può aprire (già aperto, giorno futuro, ecc.)
@@ -229,13 +248,12 @@ const AdventCalendar: React.FC = () => {
     }
 
     // Registra il tentativo PRIMA di generare il risultato
-    if (userIP) {
-      try {
-        await recordAttempt(userIP, day);
-      } catch (error) {
-        console.error('Errore nella registrazione del tentativo:', error);
-        // Continua comunque, ma logga l'errore
-      }
+    try {
+      await recordAttempt(userIP, day);
+    } catch (error) {
+      console.error('Errore nella registrazione del tentativo:', error);
+      setAttemptLimitError('Errore nella registrazione del tentativo. Riprova.');
+      return;
     }
 
     // Genera e mostra il risultato
@@ -539,37 +557,37 @@ const AdventCalendar: React.FC = () => {
 
     return (
       <div className="fixed inset-0 bg-gradient-to-br from-slate-900 to-slate-800 z-50 overflow-auto">
-        <div className="min-h-screen p-8">
+        <div className="min-h-screen p-4 sm:p-8">
           <div className="max-w-4xl mx-auto">
-            <div className="flex justify-between items-center mb-8">
-              <h1 className="text-4xl font-bold text-white flex items-center gap-3">
-                <span className="text-5xl">⚙️</span>
-                Dashboard Admin
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 sm:mb-8">
+              <h1 className="text-2xl sm:text-4xl font-bold text-white flex items-center gap-2 sm:gap-3">
+                <span className="text-3xl sm:text-5xl">⚙️</span>
+                <span>Dashboard Admin</span>
               </h1>
               <button
                 onClick={() => setShowAdmin(false)}
-                className="bg-red-500 text-white px-6 py-2 rounded-lg hover:bg-red-600 transition"
+                className="bg-red-500 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-red-600 transition w-full sm:w-auto"
               >
                 Chiudi
               </button>
             </div>
 
-            <div className="bg-white rounded-2xl p-8 mb-8 shadow-2xl">
-              <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <span className="text-3xl">🔑</span>
+            <div className="bg-white rounded-2xl p-4 sm:p-8 mb-6 sm:mb-8 shadow-2xl">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <span className="text-2xl sm:text-3xl">🔑</span>
                 Verifica Codice Vincente
               </h2>
-              <div className="flex gap-4 mb-4">
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-4">
                 <input
                   type="text"
                   value={verifyCode}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setVerifyCode(e.target.value)}
                   placeholder="Inserisci il codice (es. WIN-1-...)"
-                  className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none text-lg"
+                  className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none text-base sm:text-lg"
                 />
                 <button
                   onClick={handleVerify}
-                  className="bg-blue-500 text-white px-8 py-3 rounded-lg hover:bg-blue-600 transition font-bold"
+                  className="bg-blue-500 text-white px-6 sm:px-8 py-3 rounded-lg hover:bg-blue-600 transition font-bold w-full sm:w-auto"
                 >
                   Verifica
                 </button>
@@ -583,30 +601,30 @@ const AdventCalendar: React.FC = () => {
               )}
             </div>
 
-            <div className="bg-white rounded-2xl p-8 shadow-2xl">
-              <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <span className="text-3xl">🏆</span>
-                Codici Vincenti Generati ({allWinningCodes.length})
+            <div className="bg-white rounded-2xl p-4 sm:p-8 shadow-2xl">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <span className="text-2xl sm:text-3xl">🏆</span>
+                <span>Codici Vincenti Generati ({allWinningCodes.length})</span>
               </h2>
               {allWinningCodes.length === 0 ? (
                 <p className="text-gray-500 text-center py-8">Nessun codice vincente generato ancora.</p>
               ) : (
                 <div className="space-y-3">
                   {allWinningCodes.map((entry, idx: number) => (
-                    <div key={idx} className="bg-gradient-to-r from-yellow-50 to-orange-50 p-4 rounded-lg border-2 border-yellow-300">
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex-1">
-                          <p className="font-mono text-lg font-bold text-gray-800">{entry.code}</p>
-                          <p className="text-sm text-gray-600">Giorno {entry.day}</p>
+                    <div key={idx} className="bg-gradient-to-r from-yellow-50 to-orange-50 p-3 sm:p-4 rounded-lg border-2 border-yellow-300">
+                      <div className="flex flex-col sm:flex-row justify-between items-start gap-3 sm:gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-mono text-sm sm:text-lg font-bold text-gray-800 break-all">{entry.code}</p>
+                          <p className="text-xs sm:text-sm text-gray-600">Giorno {entry.day}</p>
                           {entry.prizeName && (
-                            <p className="text-sm font-semibold text-orange-600 mt-1">
+                            <p className="text-xs sm:text-sm font-semibold text-orange-600 mt-1">
                               🏆 {entry.prizeName} ({entry.prizeType})
                             </p>
                           )}
                         </div>
                         <button
                           onClick={() => copyCode(entry.code)}
-                          className="bg-yellow-500 text-white px-4 py-2 rounded-lg hover:bg-yellow-600 transition text-sm font-bold ml-4"
+                          className="bg-yellow-500 text-white px-4 py-2 rounded-lg hover:bg-yellow-600 transition text-sm font-bold w-full sm:w-auto sm:ml-4 whitespace-nowrap"
                         >
                           Copia
                         </button>
@@ -617,24 +635,24 @@ const AdventCalendar: React.FC = () => {
               )}
             </div>
 
-            <div className="bg-white rounded-2xl p-8 mt-8 shadow-2xl">
-              <h2 className="text-2xl font-bold text-gray-800 mb-4">📊 Statistiche</h2>
-              <div className="grid grid-cols-3 gap-4">
+            <div className="bg-white rounded-2xl p-4 sm:p-8 mt-6 sm:mt-8 shadow-2xl">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4">📊 Statistiche</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 <div className="bg-blue-50 p-4 rounded-lg text-center">
-                  <p className="text-3xl font-bold text-blue-600">{Object.keys(openedDays).length}</p>
-                  <p className="text-gray-600">Caselle Aperte</p>
+                  <p className="text-2xl sm:text-3xl font-bold text-blue-600">{Object.keys(openedDays).length}</p>
+                  <p className="text-sm sm:text-base text-gray-600">Caselle Aperte</p>
                 </div>
                 <div className="bg-green-50 p-4 rounded-lg text-center">
-                  <p className="text-3xl font-bold text-green-600">{allWinningCodes.length}</p>
-                  <p className="text-gray-600">Vincite</p>
+                  <p className="text-2xl sm:text-3xl font-bold text-green-600">{allWinningCodes.length}</p>
+                  <p className="text-sm sm:text-base text-gray-600">Vincite</p>
                 </div>
                 <div className="bg-purple-50 p-4 rounded-lg text-center">
-                  <p className="text-3xl font-bold text-purple-600">
+                  <p className="text-2xl sm:text-3xl font-bold text-purple-600">
                     {Object.keys(openedDays).length > 0 
                       ? ((allWinningCodes.length / Object.keys(openedDays).length) * 100).toFixed(1)
                       : 0}%
                   </p>
-                  <p className="text-gray-600">Tasso Vincita</p>
+                  <p className="text-sm sm:text-base text-gray-600">Tasso Vincita</p>
                 </div>
               </div>
             </div>
