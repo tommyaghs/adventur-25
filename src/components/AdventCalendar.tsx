@@ -956,7 +956,6 @@ const AdventCalendar: React.FC = () => {
         <p className="text-xl text-yellow-100 drop-shadow-md">
           Gratta una casella ogni giorno e scopri se hai vinto! 🎄
         </p>
-        <p className="text-sm text-yellow-200 mt-2">Probabilità di vincita: {(totalWinProbability * 100).toFixed(1)}%</p>
         {ipCheckLoading && (
           <p className="text-sm text-yellow-300 mt-2 animate-pulse">Caricamento...</p>
         )}
@@ -1029,7 +1028,6 @@ const AdventCalendar: React.FC = () => {
                 </div>
               </div>
               <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-1">Gratta e Vinci!</h2>
-              <p className="text-xs sm:text-sm text-gray-600">Probabilità di vincita: {(totalWinProbability * 100).toFixed(1)}%</p>
             </div>
 
             <div className="relative mb-4 overflow-hidden rounded-2xl">
