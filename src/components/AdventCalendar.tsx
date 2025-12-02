@@ -709,7 +709,7 @@ const AdventCalendar: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-900 via-purple-900 to-red-900 p-8 relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-b from-blue-900 via-purple-900 to-red-900 p-4 sm:p-6 md:p-8 relative overflow-hidden">
       <style>{`
         @keyframes fall {
           0% { transform: translateY(-20px) rotate(0deg); }
@@ -959,9 +959,9 @@ const AdventCalendar: React.FC = () => {
         </div>
       )}
 
-      <div className="fixed top-4 left-4 text-6xl opacity-50 z-0">🎄</div>
-      <div className="fixed bottom-4 left-4 text-6xl opacity-50 z-0">🎅</div>
-      <div className="fixed bottom-4 right-4 text-6xl opacity-50 z-0">🎁</div>
+      <div className="fixed top-2 left-2 sm:top-4 sm:left-4 text-3xl sm:text-4xl md:text-6xl opacity-30 sm:opacity-50 z-0">🎄</div>
+      <div className="fixed bottom-2 left-2 sm:bottom-4 sm:left-4 text-3xl sm:text-4xl md:text-6xl opacity-30 sm:opacity-50 z-0">🎅</div>
+      <div className="fixed bottom-2 right-2 sm:bottom-4 sm:right-4 text-3xl sm:text-4xl md:text-6xl opacity-30 sm:opacity-50 z-0">🎁</div>
     </div>
   );
 };
