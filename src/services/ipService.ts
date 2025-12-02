@@ -79,14 +79,52 @@ export function getTodayDateString(): string {
 }
 
 /**
+ * Verifica se il backend GitHub è configurato e funzionante
+ */
+export function isBackendConfigured(): boolean {
+  const gistId = localStorage.getItem('github_gist_id');
+  const githubToken = import.meta.env.VITE_GITHUB_TOKEN;
+  return !!(gistId && githubToken);
+}
+
+/**
  * Verifica se l'IP ha già fatto un tentativo oggi
- * Usa localStorage come cache locale + GitHub Gists come backend
+ * PRIORITÀ: Backend GitHub (fonte di verità) -> localStorage (solo cache)
+ * IMPORTANTE: Il backend GitHub è OBBLIGATORIO per la sicurezza
  */
 export async function hasAttemptedToday(ip: string, day: number): Promise<boolean> {
   const today = getTodayDateString();
   const cacheKey = `attempt_${ip}_${today}_${day}`;
   
-  // Controlla prima la cache locale
+  // PRIORITÀ 1: Verifica SEMPRE sul backend GitHub PRIMA (fonte di verità)
+  // Il backend è l'unica fonte affidabile che non può essere manipolata
+  const gistId = localStorage.getItem('github_gist_id');
+  const githubToken = import.meta.env.VITE_GITHUB_TOKEN;
+  
+  if (gistId && githubToken) {
+    try {
+      const hasAttempted = await checkGitHubBackend(ip, today, day);
+      if (hasAttempted) {
+        // Aggiorna la cache locale per performance future
+        localStorage.setItem(cacheKey, 'true');
+        return true;
+      }
+      // Se il backend dice che non ha tentato, aggiorna la cache negativa
+      localStorage.setItem(cacheKey, 'false');
+      return false;
+    } catch (error) {
+      console.error('Errore CRITICO nel controllo backend GitHub:', error);
+      // Se il backend fallisce, NON possiamo permettere il tentativo per sicurezza
+      // Usa la cache locale come ultimo fallback, ma è meno sicuro
+      // In produzione, dovresti bloccare il tentativo se il backend non risponde
+    }
+  } else {
+    // Backend non configurato - usa solo cache locale (MENO SICURO)
+    console.warn('ATTENZIONE: Backend GitHub non configurato - usando solo cache locale (non sicuro)');
+  }
+
+  // FALLBACK: Controlla la cache locale (solo se backend non disponibile)
+  // NOTA: Questo può essere bypassato cancellando la cronologia
   const cached = localStorage.getItem(cacheKey);
   if (cached === 'true') {
     return true;
@@ -108,31 +146,19 @@ export async function hasAttemptedToday(ip: string, day: number): Promise<boolea
     }
   }
 
-  // Verifica sul backend GitHub (se configurato)
-  try {
-    const hasAttempted = await checkGitHubBackend(ip, today, day);
-    if (hasAttempted) {
-      localStorage.setItem(cacheKey, 'true');
-      return true;
-    }
-  } catch (error) {
-    console.warn('Errore nel controllo backend GitHub, uso solo cache locale:', error);
-  }
-
   return false;
 }
 
 /**
  * Registra un tentativo per l'IP corrente
+ * PRIORITÀ: Backend GitHub (fonte di verità) -> localStorage (cache)
+ * IMPORTANTE: Il backend GitHub è OBBLIGATORIO per la sicurezza
  */
 export async function recordAttempt(ip: string, day: number): Promise<void> {
   const today = getTodayDateString();
   const cacheKey = `attempt_${ip}_${today}_${day}`;
   
-  // Salva in cache locale
-  localStorage.setItem(cacheKey, 'true');
-  
-  // Salva anche un record completo
+  // Crea il record del tentativo
   const attempt: AttemptRecord = {
     ip,
     date: today,
@@ -140,18 +166,48 @@ export async function recordAttempt(ip: string, day: number): Promise<void> {
     timestamp: Date.now()
   };
   
+  // PRIORITÀ 1: Salva SEMPRE sul backend GitHub PRIMA (fonte di verità)
+  const gistId = localStorage.getItem('github_gist_id');
+  const githubToken = import.meta.env.VITE_GITHUB_TOKEN;
+  
+  if (gistId && githubToken) {
+    try {
+      await saveToGitHubBackend(attempt);
+      // Solo dopo il successo sul backend, aggiorna la cache locale
+      localStorage.setItem(cacheKey, 'true');
+      
+      // Salva anche un record completo in cache locale
+      const attemptsKey = `all_attempts_${today}`;
+      const existingAttempts = localStorage.getItem(attemptsKey);
+      let attempts: AttemptRecord[] = existingAttempts ? JSON.parse(existingAttempts) : [];
+      // Evita duplicati
+      if (!attempts.some(a => a.ip === ip && a.day === day)) {
+        attempts.push(attempt);
+        localStorage.setItem(attemptsKey, JSON.stringify(attempts));
+      }
+      return; // Successo, esci
+    } catch (error) {
+      console.error('Errore CRITICO nel salvataggio su GitHub backend:', error);
+      // Se il backend fallisce, è un problema serio
+      // In produzione, dovresti bloccare il tentativo se il backend non risponde
+      // Per ora, salviamo in cache locale come fallback (MENO SICURO)
+      throw new Error('Impossibile salvare il tentativo sul backend. Il tentativo potrebbe non essere tracciato correttamente.');
+    }
+  } else {
+    // Backend non configurato - usa solo cache locale (MENO SICURO)
+    console.warn('ATTENZIONE: Backend GitHub non configurato - usando solo cache locale (non sicuro)');
+  }
+
+  // FALLBACK: Se backend non configurato o fallito, salva solo in cache locale
+  // NOTA: Questo è meno sicuro e può essere bypassato cancellando la cronologia
+  localStorage.setItem(cacheKey, 'true');
+  
   const attemptsKey = `all_attempts_${today}`;
   const existingAttempts = localStorage.getItem(attemptsKey);
   let attempts: AttemptRecord[] = existingAttempts ? JSON.parse(existingAttempts) : [];
-  attempts.push(attempt);
-  localStorage.setItem(attemptsKey, JSON.stringify(attempts));
-
-  // Prova a salvare su GitHub backend (se configurato)
-  try {
-    await saveToGitHubBackend(attempt);
-  } catch (error) {
-    console.warn('Errore nel salvataggio su GitHub backend:', error);
-    // Non blocchiamo l'utente se il backend fallisce
+  if (!attempts.some(a => a.ip === ip && a.day === day)) {
+    attempts.push(attempt);
+    localStorage.setItem(attemptsKey, JSON.stringify(attempts));
   }
 }
 
@@ -162,14 +218,21 @@ export async function recordAttempt(ip: string, day: number): Promise<void> {
 async function checkGitHubBackend(ip: string, date: string, day: number): Promise<boolean> {
   const gistId = localStorage.getItem('github_gist_id');
   if (!gistId) {
-    return false; // Nessun backend configurato
+    throw new Error('Backend GitHub non configurato');
   }
 
   try {
     // Leggi il gist (pubblico, non serve autenticazione per leggere)
-    const response = await fetch(`https://api.github.com/gists/${gistId}`);
+    const response = await fetch(`https://api.github.com/gists/${gistId}`, {
+      // Aggiungi timeout per evitare attese infinite
+      signal: AbortSignal.timeout(10000) // 10 secondi
+    });
+    
     if (!response.ok) {
-      return false;
+      if (response.status === 404) {
+        throw new Error('Gist non trovato - backend non valido');
+      }
+      throw new Error(`Errore HTTP: ${response.status}`);
     }
 
     const gist = await response.json();
@@ -177,14 +240,17 @@ async function checkGitHubBackend(ip: string, date: string, day: number): Promis
     const file = gist.files[filename];
     
     if (!file) {
-      return false;
+      return false; // Nessun tentativo per oggi
     }
 
     const attempts: AttemptRecord[] = JSON.parse(file.content);
     return attempts.some(attempt => attempt.ip === ip && attempt.day === day);
   } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('Timeout nel controllo backend - verifica la connessione');
+    }
     console.error('Errore nel controllo GitHub backend:', error);
-    return false;
+    throw error; // Rilancia l'errore invece di ritornare false
   }
 }
 
@@ -248,6 +314,72 @@ async function saveToGitHubBackend(attempt: AttemptRecord): Promise<void> {
     console.error('Errore nel salvataggio su GitHub backend:', error);
     throw error;
   }
+}
+
+/**
+ * Verifica lo stato del backend GitHub
+ * Restituisce informazioni dettagliate sulla configurazione
+ */
+export async function verifyBackendStatus(): Promise<{
+  configured: boolean;
+  tokenPresent: boolean;
+  gistIdPresent: boolean;
+  connectionOk: boolean;
+  error?: string;
+  gistId?: string;
+}> {
+  const githubToken = import.meta.env.VITE_GITHUB_TOKEN;
+  const gistId = localStorage.getItem('github_gist_id');
+  
+  const result = {
+    configured: false,
+    tokenPresent: !!githubToken,
+    gistIdPresent: !!gistId,
+    connectionOk: false,
+    gistId: gistId || undefined
+  };
+
+  // Se manca token o Gist ID, non è configurato
+  if (!githubToken || !gistId) {
+    return result;
+  }
+
+  result.configured = true;
+
+  // Testa la connessione al backend
+  try {
+    const response = await fetch(`https://api.github.com/gists/${gistId}`, {
+      headers: {
+        'Authorization': `token ${githubToken}`,
+        'Accept': 'application/vnd.github.v3+json'
+      },
+      signal: AbortSignal.timeout(10000) // 10 secondi timeout
+    });
+
+    if (response.ok) {
+      result.connectionOk = true;
+    } else {
+      if (response.status === 404) {
+        throw new Error('Gist non trovato - potrebbe essere stato eliminato');
+      } else if (response.status === 401) {
+        throw new Error('Token non valido o scaduto');
+      } else {
+        throw new Error(`Errore HTTP: ${response.status}`);
+      }
+    }
+  } catch (error) {
+    if (error instanceof Error) {
+      if (error.name === 'AbortError') {
+        throw new Error('Timeout - verifica la connessione internet');
+      } else {
+        throw error;
+      }
+    } else {
+      throw new Error('Errore sconosciuto nel test di connessione');
+    }
+  }
+
+  return result;
 }
 
 /**

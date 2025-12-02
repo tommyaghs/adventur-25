@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import jsPDF from 'jspdf';
 // @ts-ignore - qrcode non ha tipi TypeScript completi
 import QRCode from 'qrcode';
-import { getUserIP, hasAttemptedToday, recordAttempt } from '../services/ipService';
+import { getUserIP, hasAttemptedToday, recordAttempt, isBackendConfigured, verifyBackendStatus, initializeGitHubBackend } from '../services/ipService';
 
 interface Message {
   [key: number]: string;
@@ -264,12 +264,20 @@ const AdventCalendar: React.FC = () => {
       return;
     }
 
+    // Verifica se il backend è configurato (importante per la sicurezza)
+    if (!isBackendConfigured()) {
+      setAttemptLimitError('Sistema di sicurezza non configurato. Impossibile procedere con il tentativo.');
+      console.error('Backend GitHub non configurato - tentativo bloccato per sicurezza');
+      return;
+    }
+
     // Registra il tentativo PRIMA di generare il risultato
     try {
       await recordAttempt(userIP, day);
     } catch (error) {
       console.error('Errore nella registrazione del tentativo:', error);
-      setAttemptLimitError('Errore nella registrazione del tentativo. Riprova.');
+      const errorMessage = error instanceof Error ? error.message : 'Errore sconosciuto';
+      setAttemptLimitError(`Errore nella registrazione del tentativo: ${errorMessage}. Il tentativo potrebbe non essere tracciato correttamente.`);
       return;
     }
 
@@ -471,6 +479,17 @@ const AdventCalendar: React.FC = () => {
   const AdminDashboard: React.FC = () => {
     const [verifyCode, setVerifyCode] = useState<string>('');
     const [verifyResult, setVerifyResult] = useState<boolean | null>(null);
+    const [backendStatus, setBackendStatus] = useState<{
+      configured: boolean;
+      tokenPresent: boolean;
+      gistIdPresent: boolean;
+      connectionOk: boolean;
+      error?: string;
+      gistId?: string;
+    } | null>(null);
+    const [checkingBackend, setCheckingBackend] = useState<boolean>(false);
+    const [initToken, setInitToken] = useState<string>('');
+    const [initializing, setInitializing] = useState<boolean>(false);
 
     const allWinningCodes: Array<{ code: string; day: number; prizeType?: string; prizeName?: string }> = Object.entries(dayResults)
       .filter(([_, r]: [string, Prize]) => r.type === 'win' && r.code)
@@ -480,6 +499,45 @@ const AdventCalendar: React.FC = () => {
         prizeType: r.prizeType,
         prizeName: r.prizeName
       }));
+
+    const handleCheckBackend = async (): Promise<void> => {
+      setCheckingBackend(true);
+      try {
+        const status = await verifyBackendStatus();
+        setBackendStatus(status);
+      } catch (error) {
+        console.error('Errore nella verifica backend:', error);
+        setBackendStatus({
+          configured: false,
+          tokenPresent: false,
+          gistIdPresent: false,
+          connectionOk: false,
+          error: error instanceof Error ? error.message : 'Errore sconosciuto'
+        });
+      } finally {
+        setCheckingBackend(false);
+      }
+    };
+
+    const handleInitializeBackend = async (): Promise<void> => {
+      if (!initToken.trim()) {
+        alert('Inserisci un token GitHub valido');
+        return;
+      }
+      setInitializing(true);
+      try {
+        const gistId = await initializeGitHubBackend(initToken.trim());
+        alert(`Backend inizializzato con successo!\nGist ID: ${gistId}\n\nOra verifica lo stato del backend.`);
+        setInitToken('');
+        // Verifica automaticamente dopo l'inizializzazione
+        await handleCheckBackend();
+      } catch (error) {
+        console.error('Errore nell\'inizializzazione:', error);
+        alert(`Errore nell'inizializzazione: ${error instanceof Error ? error.message : 'Errore sconosciuto'}`);
+      } finally {
+        setInitializing(false);
+      }
+    };
 
     const handleVerify = async (): Promise<void> => {
       const codeEntry = allWinningCodes.find((entry) => entry.code === verifyCode.toUpperCase());
@@ -587,6 +645,87 @@ const AdventCalendar: React.FC = () => {
               >
                 Chiudi
               </button>
+            </div>
+
+            <div className="bg-white rounded-2xl p-4 sm:p-8 mb-6 sm:mb-8 shadow-2xl">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <span className="text-2xl sm:text-3xl">🔧</span>
+                Verifica Backend GitHub
+              </h2>
+              <p className="text-sm text-gray-600 mb-4">
+                Verifica se il backend GitHub è configurato correttamente per tracciare i tentativi in modo sicuro.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 mb-4">
+                <button
+                  onClick={handleCheckBackend}
+                  disabled={checkingBackend}
+                  className="bg-blue-500 text-white px-6 sm:px-8 py-3 rounded-lg hover:bg-blue-600 transition font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {checkingBackend ? 'Verifica in corso...' : '🔍 Verifica Backend'}
+                </button>
+              </div>
+              
+              {backendStatus && (
+                <div className={`p-4 rounded-lg border-2 ${
+                  backendStatus.configured && backendStatus.connectionOk
+                    ? 'bg-green-50 border-green-500'
+                    : 'bg-yellow-50 border-yellow-500'
+                }`}>
+                  <h3 className="font-bold text-lg mb-2">
+                    {backendStatus.configured && backendStatus.connectionOk
+                      ? '✅ Backend Configurato e Funzionante'
+                      : '⚠️ Backend Non Configurato o Non Funzionante'}
+                  </h3>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center gap-2">
+                      <span>{backendStatus.tokenPresent ? '✅' : '❌'}</span>
+                      <span>Token GitHub: {backendStatus.tokenPresent ? 'Presente' : 'Mancante'}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span>{backendStatus.gistIdPresent ? '✅' : '❌'}</span>
+                      <span>Gist ID: {backendStatus.gistIdPresent ? `Presente (${backendStatus.gistId})` : 'Mancante'}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span>{backendStatus.connectionOk ? '✅' : '❌'}</span>
+                      <span>Connessione: {backendStatus.connectionOk ? 'OK' : 'Fallita'}</span>
+                    </div>
+                    {backendStatus.error && (
+                      <div className="mt-2 p-2 bg-red-100 rounded text-red-700">
+                        <strong>Errore:</strong> {backendStatus.error}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {(!backendStatus.tokenPresent || !backendStatus.gistIdPresent) && (
+                    <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                      <h4 className="font-bold mb-2">🔧 Inizializza Backend</h4>
+                      <p className="text-xs text-gray-600 mb-3">
+                        Se hai un GitHub Personal Access Token con permessi 'gist', puoi inizializzare il backend qui.
+                        Il token deve essere configurato come variabile d'ambiente VITE_GITHUB_TOKEN.
+                      </p>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="password"
+                          value={initToken}
+                          onChange={(e) => setInitToken(e.target.value)}
+                          placeholder="Incolla il tuo GitHub Token qui"
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none text-sm"
+                        />
+                        <button
+                          onClick={handleInitializeBackend}
+                          disabled={initializing || !initToken.trim()}
+                          className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition font-bold disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                        >
+                          {initializing ? 'Inizializzazione...' : 'Inizializza'}
+                        </button>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-2">
+                        ⚠️ Nota: Il token sarà visibile nel codice client-side. Usa solo token con permessi limitati ai Gists.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="bg-white rounded-2xl p-4 sm:p-8 mb-6 sm:mb-8 shadow-2xl">
