@@ -10,8 +10,8 @@ export default defineConfig({
     strictPort: false,
   },
   // Configurazione per GitHub Pages
-  // Sostituisci 'adventure-25' con il nome del tuo repository
-  base: process.env.NODE_ENV === 'production' ? '/adventure-25/' : '/',
+  // Sostituisci 'adventur-25' con il nome del tuo repository
+  base: process.env.NODE_ENV === 'production' ? '/adventur-25/' : '/',
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
