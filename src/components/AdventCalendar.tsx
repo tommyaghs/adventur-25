@@ -77,17 +77,20 @@ const AdventCalendar: React.FC = () => {
     return `WIN-${day}-${prizeType}-${timestamp}-${random}`.toUpperCase();
   };
 
-  // Premi principali che si possono vincere
-  const mainPrizes: { type: string; name: string; emoji: string; description: string }[] = [
-    { type: 'CHOCOLATE', name: 'Tavoletta di Cioccolato', emoji: '🍫', description: 'Tavoletta di cioccolato da 500gr con nocciole!' },
-    { type: 'BACI', name: 'Baci Perugina', emoji: '💋', description: 'Confezione Baci Perugina da 300gr!' },
-    { type: 'AMAZON', name: 'Buono Amazon', emoji: '📦', description: 'Buono Amazon da 25€ su tutto!' },
-    // { type: 'COFFEE', name: 'Buono Caffè', emoji: '☕', description: 'Buono da 15€ per caffè e dolci al bar!' },
-    { type: 'CINEMA', name: 'Biglietti Cinema', emoji: '🎬', description: '1 biglietto per il cinema a scelta!' },
-    { type: 'BOOK', name: 'Buono Libreria', emoji: '📚', description: 'Buono da 20€ per libri e fumetti!' },
-    { type: 'SNACK', name: 'Pacco Snack', emoji: '🍿', description: 'Pacco snack assortiti (patatine, cioccolatini, caramelle)!' },
-    { type: 'COCKTAIL', name: 'bicchiere di cocktail', emoji: '🍸', description: 'cocktail a scelta!' }
+  // Premi principali che si possono vincere con relative probabilità di vincita
+  const mainPrizes: { type: string; name: string; emoji: string; description: string; probability: number }[] = [
+    { type: 'CHOCOLATE', name: 'Tavoletta di Cioccolato', emoji: '🍫', description: 'Tavoletta di cioccolato con nocciole!', probability: 0.08 },
+    { type: 'BACI', name: 'Baci Perugina', emoji: '💋', description: 'Confezione Baci Perugina!', probability: 0.08 },
+    { type: 'AMAZON', name: 'Buono Amazon', emoji: '📦', description: 'Buono Amazon da 25€ su tutto!', probability: 0.02 },
+    // { type: 'COFFEE', name: 'Buono Caffè', emoji: '☕', description: 'Buono da 15€ per caffè e dolci al bar!', probability: 0.05 },
+    { type: 'CINEMA', name: 'Biglietti Cinema', emoji: '🎬', description: '1 biglietto per il cinema a scelta!', probability: 0.05 },
+    { type: 'NETFLIX', name: '1 mese di abbonamento a Netflix', emoji: '🎥', description: '1 mese di abbonamento a Netflix!', probability: 0.05 },
+    { type: 'SNACK', name: 'Pacco Snack', emoji: '🍿', description: 'Pacco snack assortiti (cioccolatini, patatine, bibita in lattina, caramelle)!', probability: 0.10 },
+    { type: 'COCKTAIL', name: 'bicchiere di cocktail', emoji: '🍸', description: 'cocktail a scelta in disco il 26 dicembre!', probability: 0.10 }
   ];
+
+  // Calcola la probabilità totale di vincita (somma di tutte le probabilità dei premi)
+  const totalWinProbability: number = mainPrizes.reduce((sum, prize) => sum + prize.probability, 0);
 
   const prizes: Prize[] = [
     { type: 'win', text: '🎁 HAI VINTO!', subtext: 'Ecco il tuo codice vincente!', color: 'from-yellow-400 to-orange-500' },
@@ -95,21 +98,35 @@ const AdventCalendar: React.FC = () => {
   ];
 
   const generateResult = (day: number): Prize => {
-    // Probabilità di vincita: 98% (TEMPORANEO - PER TEST)
+    // Calcola la probabilità totale di vincita (somma di tutte le probabilità dei premi)
+    const totalWinProbability: number = mainPrizes.reduce((sum, prize) => sum + prize.probability, 0);
+    
     const random: number = Math.random();
-    const isWin: boolean = random < 0.38;
+    const isWin: boolean = random < totalWinProbability;
     
     if (isWin) {
-      // Seleziona un premio principale casuale
-      const mainPrize = mainPrizes[Math.floor(Math.random() * mainPrizes.length)];
-      const code: string = generateWinCode(day, mainPrize.type);
+      // Seleziona un premio in base alle probabilità pesate
+      let cumulativeProbability: number = 0;
+      const randomPrize: number = Math.random() * totalWinProbability;
+      
+      let selectedPrize = mainPrizes[0]; // Default al primo premio
+      
+      for (const prize of mainPrizes) {
+        cumulativeProbability += prize.probability;
+        if (randomPrize <= cumulativeProbability) {
+          selectedPrize = prize;
+          break;
+        }
+      }
+      
+      const code: string = generateWinCode(day, selectedPrize.type);
       return { 
         ...prizes[0], 
         code, 
-        prizeType: mainPrize.type,
-        prizeName: mainPrize.name,
-        prizeDescription: mainPrize.description,
-        text: `${mainPrize.emoji} ${mainPrize.name}`
+        prizeType: selectedPrize.type,
+        prizeName: selectedPrize.name,
+        prizeDescription: selectedPrize.description,
+        text: `${selectedPrize.emoji} ${selectedPrize.name}`
       };
     } else {
       return prizes[1];
@@ -751,7 +768,7 @@ const AdventCalendar: React.FC = () => {
         <p className="text-xl text-yellow-100 drop-shadow-md">
           Gratta una casella ogni giorno e scopri se hai vinto! 🎄
         </p>
-        <p className="text-sm text-yellow-200 mt-2">Probabilità di vincita: 38%</p>
+        <p className="text-sm text-yellow-200 mt-2">Probabilità di vincita: {(totalWinProbability * 100).toFixed(1)}%</p>
         {ipCheckLoading && (
           <p className="text-sm text-yellow-300 mt-2 animate-pulse">Caricamento...</p>
         )}
@@ -824,7 +841,7 @@ const AdventCalendar: React.FC = () => {
                 </div>
               </div>
               <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-1">Gratta e Vinci!</h2>
-              <p className="text-xs sm:text-sm text-gray-600">Probabilità di vincita: 98% (TEST)</p>
+              <p className="text-xs sm:text-sm text-gray-600">Probabilità di vincita: {(totalWinProbability * 100).toFixed(1)}%</p>
             </div>
 
             <div className="relative mb-4 overflow-hidden rounded-2xl">
