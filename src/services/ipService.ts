@@ -398,7 +398,14 @@ export async function verifyBackendStatus(): Promise<{
   const githubToken = getGitHubToken();
   let gistId = localStorage.getItem('github_gist_id');
   
-  const result = {
+  const result: {
+    configured: boolean;
+    tokenPresent: boolean;
+    gistIdPresent: boolean;
+    connectionOk: boolean;
+    error?: string;
+    gistId?: string;
+  } = {
     configured: false,
     tokenPresent: !!githubToken,
     gistIdPresent: !!gistId,
@@ -420,6 +427,7 @@ export async function verifyBackendStatus(): Promise<{
       result.gistIdPresent = true;
       result.gistId = gistId;
     } catch (error) {
+      console.error('Errore nella creazione del Gist:', error);
       result.error = error instanceof Error ? error.message : 'Errore nella creazione del Gist';
       return result;
     }
