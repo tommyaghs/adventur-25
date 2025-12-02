@@ -30,9 +30,6 @@ interface OpenedDays {
 const AdventCalendar: React.FC = () => {
   const [openedDays, setOpenedDays] = useState<OpenedDays>({});
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
-  // scratchProgress potrebbe essere usato per mostrare la percentuale grattata
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [scratchProgress, setScratchProgress] = useState<number>(0);
   const [isScratching, setIsScratching] = useState<boolean>(false);
   const [currentDate] = useState<Date>(new Date());
   const [dayResults, setDayResults] = useState<DayResults>({});
@@ -245,7 +242,6 @@ const AdventCalendar: React.FC = () => {
     const result: Prize = generateResult(day);
     setDayResults(prev => ({ ...prev, [day]: result }));
     setSelectedDay(day);
-    setScratchProgress(0);
     setIsRevealed(false);
     setIsCanvasReady(false);
     setShowConfetti(false);
@@ -353,7 +349,6 @@ const AdventCalendar: React.FC = () => {
     }
 
     const percentScratched: number = (transparent / (pixels.length / 4)) * 100;
-    setScratchProgress(percentScratched);
 
     // Rivelare il risultato non appena si inizia a grattare
     if (!isRevealed && selectedDay !== null) {
@@ -382,7 +377,6 @@ const AdventCalendar: React.FC = () => {
 
   const closeModal = (): void => {
     setSelectedDay(null);
-    setScratchProgress(0);
     setIsRevealed(false);
     setIsScratching(false);
     setIsCanvasReady(false);
