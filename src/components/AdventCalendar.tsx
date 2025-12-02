@@ -89,9 +89,6 @@ const AdventCalendar: React.FC = () => {
     { type: 'COCKTAIL', name: 'bicchiere di cocktail', emoji: '🍸', description: 'cocktail a scelta in disco il 26 dicembre!', probability: 0.02 }
   ];
 
-  // Calcola la probabilità totale di vincita (somma di tutte le probabilità dei premi)
-  const totalWinProbability: number = mainPrizes.reduce((sum, prize) => sum + prize.probability, 0);
-
   const prizes: Prize[] = [
     { type: 'win', text: '🎁 HAI VINTO!', subtext: 'Ecco il tuo codice vincente!', color: 'from-yellow-400 to-orange-500' },
     { type: 'lose', text: '😊 Riprova domani!', subtext: 'La fortuna ti sorriderà presto!', color: 'from-gray-400 to-gray-600' }
