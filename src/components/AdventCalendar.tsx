@@ -722,10 +722,6 @@ const AdventCalendar: React.FC = () => {
       >
         ⚙️
       </button>
-      <button className="text-white fixed top-4 right-5" onClick={() => {
-        localStorage.clear();
-        window.location.reload();
-      }}>cleanup local storage</button>
       <div className="text-center mb-12 relative z-10">
         <div className="flex items-center justify-center gap-3 mb-4">
           <span className="text-5xl animate-pulse">⭐</span>
