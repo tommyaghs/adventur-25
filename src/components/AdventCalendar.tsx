@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import jsPDF from 'jspdf';
 // @ts-ignore - qrcode non ha tipi TypeScript completi
 import QRCode from 'qrcode';
-import { getUserIP, hasAttemptedToday, recordAttempt, isBackendConfigured, verifyBackendStatus, initializeGitHubBackend } from '../services/ipService';
+import { getUserIP, hasAttemptedToday, recordAttempt, isBackendConfigured } from '../services/ipService';
 
 interface Message {
   [key: number]: string;
@@ -496,17 +496,6 @@ const AdventCalendar: React.FC = () => {
   const AdminDashboard: React.FC = () => {
     const [verifyCode, setVerifyCode] = useState<string>('');
     const [verifyResult, setVerifyResult] = useState<boolean | null>(null);
-    const [backendStatus, setBackendStatus] = useState<{
-      configured: boolean;
-      tokenPresent: boolean;
-      gistIdPresent: boolean;
-      connectionOk: boolean;
-      error?: string;
-      gistId?: string;
-    } | null>(null);
-    const [checkingBackend, setCheckingBackend] = useState<boolean>(false);
-    const [initToken, setInitToken] = useState<string>('');
-    const [initializing, setInitializing] = useState<boolean>(false);
 
     const allWinningCodes: Array<{ code: string; day: number; prizeType?: string; prizeName?: string }> = Object.entries(dayResults)
       .filter(([_, r]: [string, Prize]) => r.type === 'win' && r.code)
@@ -516,51 +505,6 @@ const AdventCalendar: React.FC = () => {
         prizeType: r.prizeType,
         prizeName: r.prizeName
       }));
-
-    const handleCheckBackend = async (): Promise<void> => {
-      setCheckingBackend(true);
-      try {
-        const status = await verifyBackendStatus();
-        setBackendStatus(status);
-      } catch (error) {
-        console.error('Errore nella verifica backend:', error);
-        setBackendStatus({
-          configured: false,
-          tokenPresent: false,
-          gistIdPresent: false,
-          connectionOk: false,
-          error: error instanceof Error ? error.message : 'Errore sconosciuto'
-        });
-      } finally {
-        setCheckingBackend(false);
-      }
-    };
-
-    const handleInitializeBackend = async (): Promise<void> => {
-      // Usa il token dalla variabile d'ambiente se disponibile, altrimenti usa quello inserito
-      const envToken = import.meta.env.VITE_GITHUB_TOKEN;
-      const tokenToUse = envToken || initToken.trim();
-      
-      if (!tokenToUse) {
-        alert('Token GitHub non trovato. Configura VITE_GITHUB_TOKEN nel file .env o inseriscilo nel campo.');
-        return;
-      }
-      
-      setInitializing(true);
-      try {
-        // Inizializza il backend usando il token
-        const gistId = await initializeGitHubBackend(tokenToUse);
-        alert(`✅ Backend inizializzato con successo!\n\nGist ID: ${gistId}\n\nIl backend è ora configurato e funzionante.`);
-        setInitToken('');
-        // Verifica automaticamente dopo l'inizializzazione
-        await handleCheckBackend();
-      } catch (error) {
-        console.error('Errore nell\'inizializzazione:', error);
-        alert(`❌ Errore nell'inizializzazione:\n${error instanceof Error ? error.message : 'Errore sconosciuto'}\n\nVerifica che il token sia valido e abbia i permessi 'gist'.`);
-      } finally {
-        setInitializing(false);
-      }
-    };
 
     const handleVerify = async (): Promise<void> => {
       const codeEntry = allWinningCodes.find((entry) => entry.code === verifyCode.toUpperCase());
@@ -668,114 +612,6 @@ const AdventCalendar: React.FC = () => {
               >
                 Chiudi
               </button>
-            </div>
-
-            <div className="bg-white rounded-2xl p-4 sm:p-8 mb-6 sm:mb-8 shadow-2xl">
-              <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <span className="text-2xl sm:text-3xl">🔧</span>
-                Verifica Backend GitHub
-              </h2>
-              <p className="text-sm text-gray-600 mb-4">
-                Verifica se il backend GitHub è configurato correttamente per tracciare i tentativi in modo sicuro.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-3 mb-4">
-                <button
-                  onClick={handleCheckBackend}
-                  disabled={checkingBackend}
-                  className="bg-blue-500 text-white px-6 sm:px-8 py-3 rounded-lg hover:bg-blue-600 transition font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {checkingBackend ? 'Verifica in corso...' : '🔍 Verifica Backend'}
-                </button>
-              </div>
-              
-              {backendStatus && (
-                <div className={`p-4 rounded-lg border-2 ${
-                  backendStatus.configured && backendStatus.connectionOk
-                    ? 'bg-green-50 border-green-500'
-                    : 'bg-yellow-50 border-yellow-500'
-                }`}>
-                  <h3 className="font-bold text-lg mb-2">
-                    {backendStatus.configured && backendStatus.connectionOk
-                      ? '✅ Backend Configurato e Funzionante'
-                      : '⚠️ Backend Non Configurato o Non Funzionante'}
-                  </h3>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center gap-2">
-                      <span>{backendStatus.tokenPresent ? '✅' : '❌'}</span>
-                      <span>Token GitHub: {backendStatus.tokenPresent ? 'Presente' : 'Mancante'}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span>{backendStatus.gistIdPresent ? '✅' : '❌'}</span>
-                      <span>Gist ID: {backendStatus.gistIdPresent ? `Presente (${backendStatus.gistId})` : 'Mancante'}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span>{backendStatus.connectionOk ? '✅' : '❌'}</span>
-                      <span>Connessione: {backendStatus.connectionOk ? 'OK' : 'Fallita'}</span>
-                    </div>
-                    {backendStatus.error && (
-                      <div className="mt-2 p-2 bg-red-100 rounded text-red-700">
-                        <strong>Errore:</strong> {backendStatus.error}
-                      </div>
-                    )}
-                  </div>
-                  
-                  {(!backendStatus.tokenPresent || !backendStatus.gistIdPresent) && (
-                    <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                      <h4 className="font-bold mb-2">🔧 Inizializza Backend</h4>
-                      
-                      {backendStatus.tokenPresent ? (
-                        <div className="mb-3">
-                          <p className="text-sm text-gray-700 mb-2">
-                            ✅ Token GitHub trovato nella variabile d'ambiente. Clicca il pulsante per creare il Gist.
-                          </p>
-                          <button
-                            onClick={handleInitializeBackend}
-                            disabled={initializing}
-                            className="bg-green-500 text-white px-6 py-2 rounded-lg hover:bg-green-600 transition font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {initializing ? 'Inizializzazione...' : '🚀 Inizializza Backend'}
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="mb-3">
-                          <p className="text-sm text-gray-700 mb-2">
-                            ⚠️ Token GitHub non trovato. Inserisci il token qui per inizializzare il backend.
-                          </p>
-                          <div className="flex flex-col sm:flex-row gap-2">
-                            <input
-                              type="password"
-                              value={initToken}
-                              onChange={(e) => setInitToken(e.target.value)}
-                              placeholder="Incolla il tuo GitHub Token qui (ghp_...)"
-                              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none text-sm"
-                            />
-                            <button
-                              onClick={handleInitializeBackend}
-                              disabled={initializing || !initToken.trim()}
-                              className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition font-bold disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                            >
-                              {initializing ? 'Inizializzazione...' : 'Inizializza'}
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                      <div className="mt-3 p-2 bg-yellow-50 rounded border border-yellow-300">
-                        <p className="text-xs text-yellow-800">
-                          <strong>⚠️ IMPORTANTE:</strong> Questo form serve solo per creare il Gist iniziale. 
-                          Il token deve essere configurato come variabile d'ambiente <code>VITE_GITHUB_TOKEN</code>:
-                        </p>
-                        <ul className="text-xs text-yellow-800 mt-1 list-disc list-inside space-y-1">
-                          <li><strong>Sviluppo locale:</strong> File <code>.env</code> con <code>VITE_GITHUB_TOKEN=il_tuo_token</code></li>
-                          <li><strong>Produzione:</strong> GitHub Secret <code>VITE_GITHUB_TOKEN</code> nel repository</li>
-                        </ul>
-                        <p className="text-xs text-yellow-800 mt-1">
-                          <strong>🔒 Sicurezza:</strong> Il token sarà visibile nel codice client-side. Usa SOLO token con permessi limitati ai Gists.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
 
             <div className="bg-white rounded-2xl p-4 sm:p-8 mb-6 sm:mb-8 shadow-2xl">
@@ -941,20 +777,20 @@ const AdventCalendar: React.FC = () => {
 
       <button
         onClick={() => setShowAdmin(true)}
-        className="fixed top-4 right-4 bg-slate-800 text-white p-3 rounded-full hover:bg-slate-700 transition shadow-lg z-20 text-2xl"
+        className="fixed top-2 right-2 sm:top-4 sm:right-4 bg-slate-800 text-white p-2 sm:p-3 rounded-full hover:bg-slate-700 active:bg-slate-600 transition shadow-lg z-20 text-xl sm:text-2xl touch-manipulation"
         title="Dashboard Admin"
       >
         ⚙️
       </button>
-      <div className="text-center mb-12 relative z-10">
-        <div className="flex items-center justify-center gap-3 mb-4">
-          <span className="text-5xl animate-pulse">⭐</span>
-          <h1 className="text-6xl font-bold text-white drop-shadow-lg">
+      <div className="text-center mb-6 sm:mb-8 md:mb-12 relative z-10 px-4">
+        <div className="flex items-center justify-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+          <span className="text-3xl sm:text-4xl md:text-5xl animate-pulse">⭐</span>
+          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white drop-shadow-lg">
             Calendario dell'Avvento
           </h1>
-          <span className="text-5xl animate-pulse">⭐</span>
+          <span className="text-3xl sm:text-4xl md:text-5xl animate-pulse">⭐</span>
         </div>
-        <p className="text-xl text-yellow-100 drop-shadow-md">
+        <p className="text-base sm:text-lg md:text-xl text-yellow-100 drop-shadow-md px-2">
           Gratta una casella ogni giorno e scopri se hai vinto! 🎄
         </p>
         {ipCheckLoading && (
@@ -974,7 +810,7 @@ const AdventCalendar: React.FC = () => {
         )}
       </div>
 
-      <div className="max-w-6xl mx-auto grid grid-cols-4 md:grid-cols-6 lg:grid-cols-7 gap-4 relative z-10">
+      <div className="max-w-6xl mx-auto grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-7 gap-2 sm:gap-3 md:gap-4 relative z-10 px-2 sm:px-4">
         {Object.keys(messages).map((day: string) => {
           const dayNum: number = parseInt(day);
           const isOpened: boolean = openedDays[dayNum];
@@ -988,23 +824,23 @@ const AdventCalendar: React.FC = () => {
                 setAttemptLimitError('Errore nel controllo dei tentativi. Riprova tra qualche secondo.');
               })}
               className={`
-                aspect-square rounded-xl flex flex-col items-center justify-center
+                aspect-square rounded-lg sm:rounded-xl flex flex-col items-center justify-center
                 cursor-pointer transform transition-all duration-300
-                ${isAvailable ? 'hover:scale-110 hover-shake' : 'opacity-50 cursor-not-allowed'}
+                ${isAvailable ? 'hover:scale-105 sm:hover:scale-110 hover-shake active:scale-95' : 'opacity-50 cursor-not-allowed'}
                 ${isOpened 
                   ? 'bg-gradient-to-br from-green-400 to-green-600 animate-pulse-glow' 
-                  : 'bg-gradient-to-br from-red-500 to-red-700 shadow-lg hover:shadow-2xl'
+                  : 'bg-gradient-to-br from-red-500 to-red-700 shadow-md sm:shadow-lg hover:shadow-xl sm:hover:shadow-2xl'
                 }
               `}
             >
-              <div className="text-4xl mb-2">
+              <div className="text-2xl sm:text-3xl md:text-4xl mb-1 sm:mb-2">
                 {isOpened ? '✨' : '🎁'}
               </div>
-              <div className="text-3xl font-bold text-white drop-shadow-md">
+              <div className="text-xl sm:text-2xl md:text-3xl font-bold text-white drop-shadow-md">
                 {day}
               </div>
               {isOpened && (
-                <div className="text-xs text-yellow-100 mt-1">
+                <div className="text-[10px] sm:text-xs text-yellow-100 mt-0.5 sm:mt-1">
                   Aperto!
                 </div>
               )}
