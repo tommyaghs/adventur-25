@@ -180,10 +180,10 @@ const AdventCalendar: React.FC = () => {
       setIsCanvasReady(false);
       // Usa requestAnimationFrame per assicurarsi che il DOM sia renderizzato
       requestAnimationFrame(() => {
-        // Piccolo delay per garantire che il canvas sia nel DOM
+        // Delay più lungo per garantire che il canvas sia completamente nel DOM e abbia le dimensioni corrette
         setTimeout(() => {
           initCanvas();
-        }, 0);
+        }, 100);
       });
     } else {
       setIsCanvasReady(false);
@@ -305,6 +305,15 @@ const AdventCalendar: React.FC = () => {
 
     const rect: DOMRect = canvas.getBoundingClientRect();
     
+    // Verifica che il canvas abbia dimensioni valide
+    if (rect.width === 0 || rect.height === 0) {
+      // Riprova dopo un breve delay se le dimensioni non sono ancora disponibili
+      setTimeout(() => {
+        initCanvas();
+      }, 50);
+      return;
+    }
+    
     canvas.width = rect.width;
     canvas.height = rect.height;
 
@@ -352,6 +361,13 @@ const AdventCalendar: React.FC = () => {
 
   const scratch = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>): void => {
     if (!isScratching) return;
+    
+    // Verifica che il canvas sia pronto
+    if (!isCanvasReady) {
+      // Prova a inizializzare se non è ancora pronto
+      initCanvas();
+      return;
+    }
 
     const canvas: HTMLCanvasElement | null = canvasRef.current;
     if (!canvas) return;
