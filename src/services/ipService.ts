@@ -79,11 +79,39 @@ export function getTodayDateString(): string {
 }
 
 /**
+ * Ottiene il token GitHub (da variabile d'ambiente o localStorage come fallback)
+ */
+function getGitHubToken(): string | null {
+  // Priorità 1: Variabile d'ambiente (più sicuro)
+  const envToken = import.meta.env.VITE_GITHUB_TOKEN;
+  if (envToken) {
+    return envToken;
+  }
+  // Priorità 2: localStorage (solo per test/sviluppo)
+  const localToken = localStorage.getItem('github_token_temp');
+  return localToken;
+}
+
+/**
+ * Salva un token GitHub temporaneo in localStorage (solo per test)
+ */
+export function setTemporaryGitHubToken(token: string): void {
+  localStorage.setItem('github_token_temp', token);
+}
+
+/**
+ * Rimuove il token GitHub temporaneo da localStorage
+ */
+export function removeTemporaryGitHubToken(): void {
+  localStorage.removeItem('github_token_temp');
+}
+
+/**
  * Verifica se il backend GitHub è configurato e funzionante
  */
 export function isBackendConfigured(): boolean {
   const gistId = localStorage.getItem('github_gist_id');
-  const githubToken = import.meta.env.VITE_GITHUB_TOKEN;
+  const githubToken = getGitHubToken();
   return !!(gistId && githubToken);
 }
 
@@ -99,7 +127,7 @@ export async function hasAttemptedToday(ip: string, day: number): Promise<boolea
   // PRIORITÀ 1: Verifica SEMPRE sul backend GitHub PRIMA (fonte di verità)
   // Il backend è l'unica fonte affidabile che non può essere manipolata
   const gistId = localStorage.getItem('github_gist_id');
-  const githubToken = import.meta.env.VITE_GITHUB_TOKEN;
+  const githubToken = getGitHubToken();
   
   if (gistId && githubToken) {
     try {
@@ -168,7 +196,7 @@ export async function recordAttempt(ip: string, day: number): Promise<void> {
   
   // PRIORITÀ 1: Salva SEMPRE sul backend GitHub PRIMA (fonte di verità)
   const gistId = localStorage.getItem('github_gist_id');
-  const githubToken = import.meta.env.VITE_GITHUB_TOKEN;
+  const githubToken = getGitHubToken();
   
   if (gistId && githubToken) {
     try {
@@ -260,7 +288,7 @@ async function checkGitHubBackend(ip: string, date: string, day: number): Promis
  */
 async function saveToGitHubBackend(attempt: AttemptRecord): Promise<void> {
   const gistId = localStorage.getItem('github_gist_id');
-  const githubToken = import.meta.env.VITE_GITHUB_TOKEN;
+  const githubToken = getGitHubToken();
   
   if (!gistId || !githubToken) {
     // Backend non configurato, usa solo localStorage
@@ -327,16 +355,20 @@ export async function verifyBackendStatus(): Promise<{
   connectionOk: boolean;
   error?: string;
   gistId?: string;
+  tokenSource?: 'environment' | 'localStorage';
 }> {
-  const githubToken = import.meta.env.VITE_GITHUB_TOKEN;
+  const envToken = import.meta.env.VITE_GITHUB_TOKEN;
+  const githubToken = getGitHubToken();
   const gistId = localStorage.getItem('github_gist_id');
+  const tokenSource: 'environment' | 'localStorage' = envToken ? 'environment' : 'localStorage';
   
   const result = {
     configured: false,
     tokenPresent: !!githubToken,
     gistIdPresent: !!gistId,
     connectionOk: false,
-    gistId: gistId || undefined
+    gistId: gistId || undefined,
+    tokenSource: githubToken ? tokenSource : undefined as 'environment' | 'localStorage' | undefined
   };
 
   // Se manca token o Gist ID, non è configurato
@@ -386,7 +418,7 @@ export async function verifyBackendStatus(): Promise<{
  * Inizializza il backend GitHub creando un nuovo Gist
  * Richiede un GitHub Personal Access Token
  */
-export async function initializeGitHubBackend(githubToken: string): Promise<string> {
+export async function initializeGitHubBackend(githubToken: string, saveToLocalStorage: boolean = false): Promise<string> {
   try {
     const response = await fetch('https://api.github.com/gists', {
       method: 'POST',
@@ -413,6 +445,12 @@ export async function initializeGitHubBackend(githubToken: string): Promise<stri
 
     const gist = await response.json();
     localStorage.setItem('github_gist_id', gist.id);
+    
+    // Se richiesto, salva anche il token in localStorage (solo per test)
+    if (saveToLocalStorage) {
+      setTemporaryGitHubToken(githubToken);
+    }
+    
     return gist.id;
   } catch (error) {
     console.error('Errore nell\'inizializzazione del backend GitHub:', error);
