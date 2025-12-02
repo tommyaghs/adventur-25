@@ -79,14 +79,14 @@ const AdventCalendar: React.FC = () => {
 
   // Premi principali che si possono vincere con relative probabilità di vincita
   const mainPrizes: { type: string; name: string; emoji: string; description: string; probability: number }[] = [
-    { type: 'CHOCOLATE', name: 'Tavoletta di Cioccolato', emoji: '🍫', description: 'Tavoletta di cioccolato con nocciole!', probability: 0.08 },
-    { type: 'BACI', name: 'Baci Perugina', emoji: '💋', description: 'Confezione Baci Perugina!', probability: 0.08 },
-    { type: 'AMAZON', name: 'Buono Amazon', emoji: '📦', description: 'Buono Amazon da 25€ su tutto!', probability: 0.02 },
-    // { type: 'COFFEE', name: 'Buono Caffè', emoji: '☕', description: 'Buono da 15€ per caffè e dolci al bar!', probability: 0.05 },
-    { type: 'CINEMA', name: 'Biglietti Cinema', emoji: '🎬', description: '1 biglietto per il cinema a scelta!', probability: 0.05 },
-    { type: 'NETFLIX', name: '1 mese di abbonamento a Netflix', emoji: '🎥', description: '1 mese di abbonamento a Netflix!', probability: 0.05 },
-    { type: 'SNACK', name: 'Pacco Snack', emoji: '🍿', description: 'Pacco snack assortiti (cioccolatini, patatine, bibita in lattina, caramelle)!', probability: 0.10 },
-    { type: 'COCKTAIL', name: 'bicchiere di cocktail', emoji: '🍸', description: 'cocktail a scelta in disco il 26 dicembre!', probability: 0.10 }
+    { type: 'CHOCOLATE', name: 'Tavoletta di Cioccolato', emoji: '🍫', description: 'Tavoletta di cioccolato con nocciole!', probability: 0.015 },
+    { type: 'BACI', name: 'Baci Perugina', emoji: '💋', description: 'Confezione Baci Perugina!', probability: 0.015 },
+    { type: 'AMAZON', name: 'Buono Amazon', emoji: '📦', description: 'Buono Amazon da 25€ su tutto!', probability: 0.005 },
+    // { type: 'COFFEE', name: 'Buono Caffè', emoji: '☕', description: 'Buono da 15€ per caffè e dolci al bar!', probability: 0.01 },
+    { type: 'CINEMA', name: 'Biglietti Cinema', emoji: '🎬', description: '1 biglietto per il cinema a scelta!', probability: 0.01 },
+    { type: 'NETFLIX', name: '1 mese di abbonamento a Netflix', emoji: '🎥', description: '1 mese di abbonamento a Netflix!', probability: 0.01 },
+    { type: 'SNACK', name: 'Pacco Snack', emoji: '🍿', description: 'Pacco snack assortiti (cioccolatini, patatine, bibita in lattina, caramelle)!', probability: 0.02 },
+    { type: 'COCKTAIL', name: 'bicchiere di cocktail', emoji: '🍸', description: 'cocktail a scelta in disco il 26 dicembre!', probability: 0.02 }
   ];
 
   // Calcola la probabilità totale di vincita (somma di tutte le probabilità dei premi)
