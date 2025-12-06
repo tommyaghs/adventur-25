@@ -42,6 +42,8 @@ const AdventCalendar: React.FC = () => {
   const [userIP, setUserIP] = useState<string | null>(null);
   const [ipCheckLoading, setIpCheckLoading] = useState<boolean>(true);
   const [attemptLimitError, setAttemptLimitError] = useState<string | null>(null);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
+  const notificationIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const messages: Message = {
     1: "Ogni giorno è un nuovo inizio. Abbraccia le possibilità che ti aspettano! ✨",
@@ -236,6 +238,100 @@ const AdventCalendar: React.FC = () => {
       }
     };
     initIP();
+  }, []);
+
+  // Richiedi permesso per le notifiche e configura il sistema di notifiche
+  useEffect(() => {
+    // Verifica se il browser supporta le notifiche
+    if (!('Notification' in window)) {
+      console.log('Questo browser non supporta le notifiche desktop');
+      return;
+    }
+
+    // Funzione per calcolare il tempo fino alla prossima mezzanotte
+    const getTimeUntilMidnight = (): number => {
+      const now = new Date();
+      const midnight = new Date();
+      midnight.setHours(24, 0, 0, 0); // Prossima mezzanotte
+      return midnight.getTime() - now.getTime();
+    };
+
+    // Funzione per inviare la notifica
+    const sendNotification = (): void => {
+      if (Notification.permission === 'granted') {
+        new Notification('Calendario dell\'Avvento 🎄', {
+          body: 'Ricorda di aprire la tua casella del calendario dell\'avvento!',
+          icon: '/vite.svg', // Puoi cambiare con un'icona personalizzata
+          badge: '/vite.svg',
+          tag: 'advent-calendar-reminder',
+          requireInteraction: false
+        });
+      }
+    };
+
+    // Funzione per configurare la notifica di mezzanotte
+    const setupMidnightNotification = async (): Promise<void> => {
+      // Pulisci eventuali intervalli precedenti
+      if (notificationIntervalRef.current) {
+        clearInterval(notificationIntervalRef.current);
+      }
+
+      // Calcola il tempo fino alla prossima mezzanotte
+      const timeUntilMidnight = getTimeUntilMidnight();
+
+      // Prova a usare il Service Worker se disponibile (migliore per mobile)
+      if ('serviceWorker' in navigator && 'Notification' in window && Notification.permission === 'granted') {
+        try {
+          const registration = await navigator.serviceWorker.ready;
+          if (registration.active) {
+            // Usa il Service Worker per le notifiche programmate
+            registration.active.postMessage({
+              type: 'SCHEDULE_NOTIFICATION',
+              timeUntilMidnight
+            });
+            console.log('Notifiche programmate tramite Service Worker');
+            return;
+          }
+        } catch (error) {
+          console.log('Service Worker non disponibile, uso notifiche standard:', error);
+        }
+      }
+
+      // Fallback: usa le notifiche standard del browser (funzionano solo se il browser è aperto)
+      setTimeout(() => {
+        sendNotification();
+        
+        // Poi imposta un intervallo per inviare la notifica ogni 24 ore (mezzanotte)
+        notificationIntervalRef.current = setInterval(() => {
+          sendNotification();
+        }, 24 * 60 * 60 * 1000); // 24 ore in millisecondi
+      }, timeUntilMidnight);
+    };
+
+    // Controlla lo stato attuale del permesso
+    setNotificationPermission(Notification.permission);
+
+    // Se il permesso non è ancora stato richiesto o è stato negato, chiedilo
+    if (Notification.permission === 'default') {
+      Notification.requestPermission().then(async (permission) => {
+        setNotificationPermission(permission);
+        if (permission === 'granted') {
+          console.log('Permesso per le notifiche concesso');
+          await setupMidnightNotification();
+        } else {
+          console.log('Permesso per le notifiche negato');
+        }
+      });
+    } else if (Notification.permission === 'granted') {
+      setupMidnightNotification();
+    }
+
+    // Cleanup quando il componente viene smontato
+    return () => {
+      if (notificationIntervalRef.current) {
+        clearInterval(notificationIntervalRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -941,6 +1037,75 @@ const AdventCalendar: React.FC = () => {
               className="mt-2 bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg text-sm font-bold transition"
             >
               Chiudi
+            </button>
+          </div>
+        )}
+        {('Notification' in window) && notificationPermission !== 'granted' && (
+          <div className="mt-4 max-w-2xl mx-auto bg-blue-500 bg-opacity-90 text-white p-4 rounded-lg border-2 border-blue-300 shadow-lg">
+            <p className="font-bold text-lg">🔔 Attiva le Notifiche</p>
+            <p className="text-sm mt-1">Ricevi un promemoria ogni mezzanotte per aprire la tua casella del calendario dell'avvento!</p>
+            <p className="text-xs mt-2 opacity-90">
+              📱 <strong>Suggerimento:</strong> aggiungi questa pagina alla home del tuo dispositivo.
+            </p>
+            <button
+              onClick={async () => {
+                if ('Notification' in window) {
+                  const permission = await Notification.requestPermission();
+                  setNotificationPermission(permission);
+                  if (permission === 'granted') {
+                    // Riconfigura le notifiche usando la stessa logica del useEffect
+                    const getTimeUntilMidnight = (): number => {
+                      const now = new Date();
+                      const midnight = new Date();
+                      midnight.setHours(24, 0, 0, 0);
+                      return midnight.getTime() - now.getTime();
+                    };
+                    const timeUntilMidnight = getTimeUntilMidnight();
+                    
+                    // Prova a usare Service Worker se disponibile
+                    if ('serviceWorker' in navigator) {
+                      try {
+                        const registration = await navigator.serviceWorker.ready;
+                        if (registration.active) {
+                          registration.active.postMessage({
+                            type: 'SCHEDULE_NOTIFICATION',
+                            timeUntilMidnight
+                          });
+                          return;
+                        }
+                      } catch (error) {
+                        console.log('Service Worker non disponibile:', error);
+                      }
+                    }
+                    
+                    // Fallback: notifiche standard
+                    const sendNotification = (): void => {
+                      if (Notification.permission === 'granted') {
+                        new Notification('Calendario dell\'Avvento 🎄', {
+                          body: 'Ricorda di aprire la tua casella del calendario dell\'avvento!',
+                          icon: '/vite.svg',
+                          badge: '/vite.svg',
+                          tag: 'advent-calendar-reminder',
+                          requireInteraction: false
+                        });
+                      }
+                    };
+                    
+                    if (notificationIntervalRef.current) {
+                      clearInterval(notificationIntervalRef.current);
+                    }
+                    setTimeout(() => {
+                      sendNotification();
+                      notificationIntervalRef.current = setInterval(() => {
+                        sendNotification();
+                      }, 24 * 60 * 60 * 1000);
+                    }, timeUntilMidnight);
+                  }
+                }
+              }}
+              className="mt-2 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-sm font-bold transition"
+            >
+              Attiva Notifiche
             </button>
           </div>
         )}

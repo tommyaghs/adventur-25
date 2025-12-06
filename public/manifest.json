@@ -1,0 +1,19 @@
+{
+  "name": "Calendario dell'Avvento",
+  "short_name": "Avvento",
+  "description": "Calendario dell'Avvento - Gratta e Vinci ogni giorno!",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1e3a8a",
+  "theme_color": "#1e3a8a",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
+
