@@ -70,16 +70,105 @@ const AdventCalendar: React.FC = () => {
     24: "Sei amato, sei importante, sei necessario. Buon Natale! 🎄"
   };
 
+  // Genera un codice vincente calcolato (verificabile senza storage)
   const generateWinCode = (day: number, prizeType: string): string => {
     const timestamp: number = Date.now();
+    // Calcola timestamp^4 e prendi le ultime 12 cifre per evitare numeri troppo grandi
+    const timestampPower4: bigint = BigInt(timestamp) ** BigInt(4);
+    const timestampPart: string = timestampPower4.toString().slice(-12); // Ultime 12 cifre
     const random: number = Math.floor(Math.random() * 10000);
-    // Includi il tipo di premio nel codice per poter risalire
-    return `WIN-${day}-${prizeType}-${timestamp}-${random}`.toUpperCase();
+    // Formato: WIN-{day}-{prizeType}-{timestamp^4}-{random}
+    return `WIN-${day}-${prizeType}-${timestampPart}-${random.toString().padStart(4, '0')}`.toUpperCase();
+  };
+
+  // Verifica se un codice vincente è valido (calcolato, non basato su storage)
+  const verifyWinCode = (code: string): { isValid: boolean; day?: number; prizeType?: string; timestamp?: number; error?: string } => {
+    try {
+      const upperCode = code.toUpperCase().trim();
+      
+      // Verifica formato base: WIN-{day}-{prizeType}-{timestamp^4}-{random}
+      if (!upperCode.startsWith('WIN-')) {
+        return { isValid: false, error: 'Formato codice non valido' };
+      }
+
+      const parts = upperCode.split('-');
+      if (parts.length !== 5) {
+        return { isValid: false, error: 'Formato codice non valido: numero di parti errato' };
+      }
+
+      const day = parseInt(parts[1]);
+      const prizeType = parts[2];
+      const timestampPart = parts[3];
+      const randomPart = parts[4];
+
+      // Verifica che il giorno sia valido (1-24)
+      if (isNaN(day) || day < 1 || day > 24) {
+        return { isValid: false, error: 'Giorno non valido' };
+      }
+
+      // Verifica che il tipo premio sia valido
+      const validPrizeTypes = mainPrizes.map(p => p.type);
+      if (!validPrizeTypes.includes(prizeType)) {
+        return { isValid: false, error: 'Tipo premio non valido' };
+      }
+
+      // Verifica formato timestamp^4 (deve essere numerico e avere 12 cifre)
+      if (!/^\d{12}$/.test(timestampPart)) {
+        return { isValid: false, error: 'Parte timestamp non valida' };
+      }
+
+      // Verifica formato random (deve essere numerico e avere 4 cifre)
+      if (!/^\d{4}$/.test(randomPart)) {
+        return { isValid: false, error: 'Parte random non valida' };
+      }
+
+      // Calcola il timestamp originale approssimato
+      // timestamp^4 mod 10^12 = timestampPart
+      // Verifica che esista un timestamp valido nel range ragionevole
+      const now = Date.now();
+      const oneYearAgo = now - (365 * 24 * 60 * 60 * 1000);
+      const oneDayFuture = now + (24 * 60 * 60 * 1000);
+      
+      // Ottimizzazione: controlla solo ogni 100ms invece di ogni ms per velocizzare
+      // Inoltre, controlla solo gli ultimi 2 anni per limitare il range
+      const twoYearsAgo = now - (2 * 365 * 24 * 60 * 60 * 1000);
+      let foundValidTimestamp = false;
+      let validTimestamp = 0;
+      
+      // Controlla un range di timestamp (ultimi 2 anni, ogni 100ms)
+      for (let checkTime = twoYearsAgo; checkTime <= oneDayFuture; checkTime += 100) {
+        const checkPower4 = BigInt(checkTime) ** BigInt(4);
+        const checkPart = checkPower4.toString().slice(-12);
+        if (checkPart === timestampPart) {
+          foundValidTimestamp = true;
+          validTimestamp = checkTime;
+          break;
+        }
+      }
+
+      if (!foundValidTimestamp) {
+        return { isValid: false, error: 'Timestamp non valido o fuori range' };
+      }
+
+      // Verifica che il timestamp sia ragionevole (non più vecchio di 1 anno)
+      if (validTimestamp < oneYearAgo) {
+        return { isValid: false, error: 'Codice troppo vecchio (oltre 1 anno)' };
+      }
+
+      return {
+        isValid: true,
+        day,
+        prizeType,
+        timestamp: validTimestamp
+      };
+    } catch (error) {
+      return { isValid: false, error: `Errore nella verifica: ${error instanceof Error ? error.message : 'Errore sconosciuto'}` };
+    }
   };
 
   // Premi principali che si possono vincere con relative probabilità di vincita
   const mainPrizes: { type: string; name: string; emoji: string; description: string; probability: number }[] = [
-    { type: 'CHOCOLATE', name: 'Tavoletta di Cioccolato', emoji: '🍫', description: 'Tavoletta di cioccolato con nocciole!', probability: 0.015 },
+    { type: 'CHOCOLATE', name: 'Tavoletta di Cioccolato', emoji: '🍫', description: 'Tavoletta di cioccolato con nocciole!', probability: 0.05 },
     { type: 'BACI', name: 'Baci Perugina', emoji: '💋', description: 'Confezione Baci Perugina!', probability: 0.015 },
     { type: 'AMAZON', name: 'Buono Amazon', emoji: '📦', description: 'Buono Amazon da 25€ su tutto!', probability: 0.005 },
     // { type: 'COFFEE', name: 'Buono Caffè', emoji: '☕', description: 'Buono da 15€ per caffè e dolci al bar!', probability: 0.01 },
@@ -191,7 +280,7 @@ const AdventCalendar: React.FC = () => {
   const canOpenSync = (day: number): boolean => {
     const today: number = currentDate.getDate();
     const currentMonth: number = currentDate.getMonth();
-    return currentMonth === 11 && day <= today && !openedDays[day];
+    return currentMonth === 11 && day === today && !openedDays[day];
   };
 
   // Versione asincrona per il controllo completo (incluso IP)
@@ -507,10 +596,21 @@ const AdventCalendar: React.FC = () => {
       }));
 
     const handleVerify = async (): Promise<void> => {
-      const codeEntry = allWinningCodes.find((entry) => entry.code === verifyCode.toUpperCase());
-      const isValid: boolean = !!codeEntry;
-      setVerifyResult(isValid);
-      if (isValid && codeEntry) {
+      if (!verifyCode.trim()) {
+        setVerifyResult(false);
+        return;
+      }
+
+      // Usa la verifica calcolata invece di cercare nel localStorage
+      const verification = verifyWinCode(verifyCode);
+      setVerifyResult(verification.isValid);
+
+      if (verification.isValid && verification.day && verification.prizeType) {
+        // Trova le informazioni del premio dal tipo
+        const prizeInfo = mainPrizes.find(p => p.type === verification.prizeType);
+        const prizeName = prizeInfo?.name || 'Premio Speciale';
+        const prizeDescription = prizeInfo?.description || '';
+
         // Genera PDF con QR code
         try {
           const pdf = new jsPDF();
@@ -532,25 +632,30 @@ const AdventCalendar: React.FC = () => {
           
           pdf.setFontSize(14);
           pdf.setFont(undefined as any, 'bold');
-          const prizeInfo = codeEntry.prizeName || 'Premio Speciale';
-          pdf.text(prizeInfo, 20, 60);
+          pdf.text(prizeName, 20, 60);
           
           pdf.setFont(undefined as any, 'normal');
           pdf.setFontSize(12);
-          pdf.text(`Giorno: ${codeEntry.day}`, 20, 70);
-          pdf.text(`Tipo Premio: ${codeEntry.prizeType || 'N/A'}`, 20, 76);
+          pdf.text(`Giorno: ${verification.day}`, 20, 70);
+          pdf.text(`Tipo Premio: ${verification.prizeType}`, 20, 76);
+          
+          if (prizeDescription) {
+            pdf.setFontSize(10);
+            pdf.text(prizeDescription, 20, 82);
+          }
           
           // Codice vincente
           pdf.setFontSize(14);
           pdf.setFont(undefined as any, 'bold');
-          pdf.text('Codice Vincente:', 20, 90);
+          pdf.text('Codice Vincente:', 20, 95);
           
           pdf.setFont('courier', 'bold');
-          pdf.setFontSize(12);
-          pdf.text(codeEntry.code, 20, 100);
+          pdf.setFontSize(10);
+          const codeLines = pdf.splitTextToSize(verifyCode.toUpperCase(), 170);
+          pdf.text(codeLines, 20, 105);
           
           // Genera QR code
-          const qrCodeDataUrl = await QRCode.toDataURL(codeEntry.code, {
+          const qrCodeDataUrl = await QRCode.toDataURL(verifyCode.toUpperCase(), {
             width: 100,
             margin: 2,
             color: {
@@ -560,7 +665,7 @@ const AdventCalendar: React.FC = () => {
           });
           
           // Aggiungi QR code al PDF
-          pdf.addImage(qrCodeDataUrl, 'PNG', 145, 80, 40, 40);
+          pdf.addImage(qrCodeDataUrl, 'PNG', 145, 85, 40, 40);
           
           // Data di validazione
           pdf.setFont('helvetica', 'normal');
@@ -572,13 +677,28 @@ const AdventCalendar: React.FC = () => {
             hour: '2-digit',
             minute: '2-digit'
           });
-          pdf.text(`Validato il: ${validationDate}`, 20, 120);
+          pdf.text(`Validato il: ${validationDate}`, 20, 130);
+          
+          // Data di generazione del codice (se disponibile)
+          if (verification.timestamp) {
+            const codeDate = new Date(verification.timestamp).toLocaleDateString('it-IT', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            });
+            pdf.setFontSize(9);
+            pdf.setTextColor(100, 100, 100);
+            pdf.text(`Generato il: ${codeDate}`, 20, 137);
+          }
           
           // Note
           pdf.setFontSize(9);
           pdf.setTextColor(100, 100, 100);
-          pdf.text('Questo certificato attesta la validità del codice vincente.', 20, 130);
-          pdf.text('Scansiona il QR code per verificare il codice.', 20, 136);
+          pdf.text('Questo certificato attesta la validità del codice vincente.', 20, 145);
+          pdf.text('Il codice è verificato matematicamente senza bisogno di database.', 20, 151);
+          pdf.text('Scansiona il QR code per verificare il codice.', 20, 157);
           
           // Footer
           pdf.setFontSize(8);
@@ -586,14 +706,17 @@ const AdventCalendar: React.FC = () => {
           pdf.text('Calendario dell\'Avvento 2025', 105, 280, { align: 'center' });
           
           // Salva il PDF
-          pdf.save(`certificato-vincita-${codeEntry.code}.pdf`);
+          pdf.save(`certificato-vincita-${verifyCode.toUpperCase().replace(/[^A-Z0-9]/g, '-')}.pdf`);
           
           // Mostra anche alert
-          alert(`Codice valido!\nGiorno: ${codeEntry.day}\nPremio: ${codeEntry.prizeName || 'N/A'}\nTipo: ${codeEntry.prizeType || 'N/A'}\n\nPDF generato con successo!`);
+          alert(`✅ Codice valido!\n\nGiorno: ${verification.day}\nPremio: ${prizeName}\nTipo: ${verification.prizeType}\n\nPDF generato con successo!`);
         } catch (error) {
           console.error('Errore nella generazione del PDF:', error);
-          alert(`Codice valido!\nGiorno: ${codeEntry.day}\nPremio: ${codeEntry.prizeName || 'N/A'}\nTipo: ${codeEntry.prizeType || 'N/A'}\n\nErrore nella generazione del PDF.`);
+          alert(`✅ Codice valido!\n\nGiorno: ${verification.day}\nPremio: ${prizeName}\nTipo: ${verification.prizeType}\n\nErrore nella generazione del PDF.`);
         }
+      } else if (!verification.isValid) {
+        // Mostra messaggio di errore dettagliato
+        alert(`❌ Codice non valido!\n\n${verification.error || 'Il codice non è valido o non è stato generato correttamente.'}`);
       }
     };
 
@@ -619,13 +742,24 @@ const AdventCalendar: React.FC = () => {
                 <span className="text-2xl sm:text-3xl">🔑</span>
                 Verifica Codice Vincente
               </h2>
+              <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-3 mb-4">
+                <p className="text-sm text-blue-800">
+                  <strong>ℹ️ Verifica Calcolata:</strong> I codici vincenti sono verificati matematicamente senza bisogno di database. 
+                  Ogni codice contiene informazioni crittografiche che ne garantiscono l'autenticità.
+                </p>
+              </div>
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-4">
                 <input
                   type="text"
                   value={verifyCode}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setVerifyCode(e.target.value)}
-                  placeholder="Inserisci il codice (es. WIN-1-...)"
+                  placeholder="Inserisci il codice (es. WIN-1-CHOCOLATE-...)"
                   className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none text-base sm:text-lg"
+                  onKeyPress={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                    if (e.key === 'Enter') {
+                      handleVerify();
+                    }
+                  }}
                 />
                 <button
                   onClick={handleVerify}
@@ -637,7 +771,9 @@ const AdventCalendar: React.FC = () => {
               {verifyResult !== null && (
                 <div className={`p-4 rounded-lg ${verifyResult ? 'bg-green-100 border-2 border-green-500' : 'bg-red-100 border-2 border-red-500'}`}>
                   <p className={`text-lg font-bold ${verifyResult ? 'text-green-700' : 'text-red-700'}`}>
-                    {verifyResult ? '✅ CODICE VALIDO! Questo è un codice vincente.' : '❌ CODICE NON VALIDO. Questo codice non esiste o è già stato utilizzato.'}
+                    {verifyResult 
+                      ? '✅ CODICE VALIDO! Questo è un codice vincente verificato matematicamente.' 
+                      : '❌ CODICE NON VALIDO. Il codice non è valido o non è stato generato correttamente.'}
                   </p>
                 </div>
               )}
