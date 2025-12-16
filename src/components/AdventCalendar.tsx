@@ -42,6 +42,7 @@ const AdventCalendar: React.FC = () => {
   const [userIP, setUserIP] = useState<string | null>(null);
   const [ipCheckLoading, setIpCheckLoading] = useState<boolean>(true);
   const [attemptLimitError, setAttemptLimitError] = useState<string | null>(null);
+  const [showLegend, setShowLegend] = useState<boolean>(false);
 
   const messages: Message = {
     1: "Ogni giorno è un nuovo inizio. Abbraccia le possibilità che ti aspettano! ✨",
@@ -81,7 +82,8 @@ const AdventCalendar: React.FC = () => {
     return `WIN-${day}-${prizeType}-${timestampPart}-${random.toString().padStart(4, '0')}`.toUpperCase();
   };
 
-  // Verifica se un codice vincente è valido (calcolato, non basato su storage)
+  // Verifica se un codice vincente è valido
+  // Sistema semplificato: controlla se il codice esiste nei codici salvati localmente
   const verifyWinCode = (code: string): { isValid: boolean; day?: number; prizeType?: string; timestamp?: number; error?: string } => {
     try {
       const upperCode = code.toUpperCase().trim();
@@ -122,44 +124,27 @@ const AdventCalendar: React.FC = () => {
         return { isValid: false, error: 'Parte random non valida' };
       }
 
-      // Calcola il timestamp originale approssimato
-      // timestamp^4 mod 10^12 = timestampPart
-      // Verifica che esista un timestamp valido nel range ragionevole
-      const now = Date.now();
-      const oneYearAgo = now - (365 * 24 * 60 * 60 * 1000);
-      const oneDayFuture = now + (24 * 60 * 60 * 1000);
-      
-      // Ottimizzazione: controlla solo ogni 100ms invece di ogni ms per velocizzare
-      // Inoltre, controlla solo gli ultimi 2 anni per limitare il range
-      const twoYearsAgo = now - (2 * 365 * 24 * 60 * 60 * 1000);
-      let foundValidTimestamp = false;
-      let validTimestamp = 0;
-      
-      // Controlla un range di timestamp (ultimi 2 anni, ogni 100ms)
-      for (let checkTime = twoYearsAgo; checkTime <= oneDayFuture; checkTime += 100) {
-        const checkPower4 = BigInt(checkTime) ** BigInt(4);
-        const checkPart = checkPower4.toString().slice(-12);
-        if (checkPart === timestampPart) {
-          foundValidTimestamp = true;
-          validTimestamp = checkTime;
-          break;
-        }
+      // NUOVO SISTEMA: Controlla se il codice esiste nei risultati salvati
+      // Questo funziona solo per i codici generati su questo dispositivo
+      const savedCode = dayResults[day]?.code;
+      if (savedCode && savedCode.toUpperCase() === upperCode) {
+        return {
+          isValid: true,
+          day,
+          prizeType,
+          timestamp: Date.now() // Timestamp approssimato
+        };
       }
 
-      if (!foundValidTimestamp) {
-        return { isValid: false, error: 'Timestamp non valido o fuori range' };
-      }
-
-      // Verifica che il timestamp sia ragionevole (non più vecchio di 1 anno)
-      if (validTimestamp < oneYearAgo) {
-        return { isValid: false, error: 'Codice troppo vecchio (oltre 1 anno)' };
-      }
-
+      // Se non è nei risultati locali, controlla la validità del formato
+      // Un codice ben formato può essere considerato potenzialmente valido
+      // (la verifica completa richiederebbe un database centralizzato)
       return {
         isValid: true,
         day,
         prizeType,
-        timestamp: validTimestamp
+        timestamp: Date.now(),
+        error: '⚠️ Codice formattato correttamente. Verifica con l\'organizzatore per conferma finale.'
       };
     } catch (error) {
       return { isValid: false, error: `Errore nella verifica: ${error instanceof Error ? error.message : 'Errore sconosciuto'}` };
@@ -168,15 +153,19 @@ const AdventCalendar: React.FC = () => {
 
   // Premi principali che si possono vincere con relative probabilità di vincita
   const mainPrizes: { type: string; name: string; emoji: string; description: string; probability: number }[] = [
-    { type: 'CHOCOLATE', name: 'Tavoletta di Cioccolato', emoji: '🍫', description: 'Tavoletta di cioccolato con nocciole!', probability: 0.00005 },
-    { type: 'BACI', name: 'Baci Perugina', emoji: '💋', description: 'Confezione Baci Perugina!', probability: 0.00005 },
-    { type: 'AMAZON', name: 'Buono Amazon', emoji: '📦', description: 'Buono Amazon da 25€ su tutto!', probability: 0.00005 },
-    // { type: 'COFFEE', name: 'Buono Caffè', emoji: '☕', description: 'Buono da 15€ per caffè e dolci al bar!', probability: 0.01 },
-    { type: 'CINEMA', name: 'Biglietti Cinema', emoji: '🎬', description: '1 biglietto per il cinema a scelta!', probability: 0.00005 },
-    { type: 'NETFLIX', name: '1 mese di abbonamento a Netflix', emoji: '🎥', description: '1 mese di abbonamento a Netflix!', probability: 0.00005 },
-    { type: 'SNACK', name: 'Pacco Snack', emoji: '🍿', description: 'Pacco snack assortiti (cioccolatini, patatine, bibita in lattina, caramelle)!', probability: 0.00005 },
-    { type: 'COCKTAIL', name: 'bicchiere di cocktail', emoji: '🍸', description: 'cocktail a scelta in disco il 26 dicembre!', probability: 0.00005 }
+    { type: 'MYSTERY_BRONZE', name: 'Mystery Box Bronze', emoji: '📦', description: 'Mystery Box Bronze - Scopri cosa contiene!', probability: 0.20 },
+    { type: 'MYSTERY_SILVER', name: 'Mystery Box Silver', emoji: '📦', description: 'Mystery Box Silver - Scopri cosa contiene!', probability: 0.10 },
+    { type: 'MYSTERY_GOLD', name: 'Mystery Box Gold', emoji: '📦', description: 'Mystery Box Gold - Scopri cosa contiene!', probability: 0.05 },
+    { type: 'MYSTERY_PLATINUM', name: 'Mystery Box Platinum', emoji: '📦', description: 'Mystery Box Platinum - Scopri cosa contiene!', probability: 0.02 }
   ];
+
+  // Mappa dei colori per ogni tipo di Mystery Box
+  const prizeColors: { [key: string]: string } = {
+    'MYSTERY_BRONZE': 'from-amber-700 via-orange-600 to-amber-700',
+    'MYSTERY_SILVER': 'from-gray-300 via-gray-100 to-gray-300',
+    'MYSTERY_GOLD': 'from-yellow-400 via-yellow-200 to-yellow-400',
+    'MYSTERY_PLATINUM': 'from-cyan-300 via-white to-purple-300'
+  };
 
   const prizes: Prize[] = [
     { type: 'win', text: '🎁 HAI VINTO!', subtext: 'Ecco il tuo codice vincente!', color: 'from-yellow-400 to-orange-500' },
@@ -206,13 +195,16 @@ const AdventCalendar: React.FC = () => {
       }
       
       const code: string = generateWinCode(day, selectedPrize.type);
+      // Usa il colore specifico per il tipo di Mystery Box
+      const prizeColor = prizeColors[selectedPrize.type] || 'from-yellow-400 to-orange-500';
       return { 
         ...prizes[0], 
         code, 
         prizeType: selectedPrize.type,
         prizeName: selectedPrize.name,
         prizeDescription: selectedPrize.description,
-        text: `${selectedPrize.emoji} ${selectedPrize.name}`
+        text: `${selectedPrize.emoji} ${selectedPrize.name}`,
+        color: prizeColor
       };
     } else {
       return prizes[1];
@@ -239,11 +231,11 @@ const AdventCalendar: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const saved: string | null = localStorage.getItem('adventResults');
+    const saved: string | null = localStorage.getItem('adventure25_results');
     if (saved) {
       setDayResults(JSON.parse(saved));
     }
-    const savedOpened: string | null = localStorage.getItem('adventOpened');
+    const savedOpened: string | null = localStorage.getItem('adventure25_opened');
     if (savedOpened) {
       setOpenedDays(JSON.parse(savedOpened));
     }
@@ -251,13 +243,13 @@ const AdventCalendar: React.FC = () => {
 
   useEffect(() => {
     if (Object.keys(dayResults).length > 0) {
-      localStorage.setItem('adventResults', JSON.stringify(dayResults));
+      localStorage.setItem('adventure25_results', JSON.stringify(dayResults));
     }
   }, [dayResults]);
 
   useEffect(() => {
     if (Object.keys(openedDays).length > 0) {
-      localStorage.setItem('adventOpened', JSON.stringify(openedDays));
+      localStorage.setItem('adventure25_opened', JSON.stringify(openedDays));
     }
   }, [openedDays]);
 
@@ -601,7 +593,7 @@ const AdventCalendar: React.FC = () => {
         return;
       }
 
-      // Usa la verifica calcolata invece di cercare nel localStorage
+      // Usa la verifica semplificata
       const verification = verifyWinCode(verifyCode);
       setVerifyResult(verification.isValid);
 
@@ -610,6 +602,12 @@ const AdventCalendar: React.FC = () => {
         const prizeInfo = mainPrizes.find(p => p.type === verification.prizeType);
         const prizeName = prizeInfo?.name || 'Premio Speciale';
         const prizeDescription = prizeInfo?.description || '';
+
+        // Messaggio di verifica (con warning se presente)
+        let verificationMessage = `✅ Codice valido!\n\nGiorno: ${verification.day}\nPremio: ${prizeName}\nTipo: ${verification.prizeType}`;
+        if (verification.error) {
+          verificationMessage += `\n\n${verification.error}`;
+        }
 
         // Genera PDF con QR code
         try {
@@ -709,10 +707,10 @@ const AdventCalendar: React.FC = () => {
           pdf.save(`certificato-vincita-${verifyCode.toUpperCase().replace(/[^A-Z0-9]/g, '-')}.pdf`);
           
           // Mostra anche alert
-          alert(`✅ Codice valido!\n\nGiorno: ${verification.day}\nPremio: ${prizeName}\nTipo: ${verification.prizeType}\n\nPDF generato con successo!`);
+          alert(`${verificationMessage}\n\nPDF generato con successo!`);
         } catch (error) {
           console.error('Errore nella generazione del PDF:', error);
-          alert(`✅ Codice valido!\n\nGiorno: ${verification.day}\nPremio: ${prizeName}\nTipo: ${verification.prizeType}\n\nErrore nella generazione del PDF.`);
+          alert(`${verificationMessage}\n\nErrore nella generazione del PDF.`);
         }
       } else if (!verification.isValid) {
         // Mostra messaggio di errore dettagliato
@@ -772,8 +770,8 @@ const AdventCalendar: React.FC = () => {
                 <div className={`p-4 rounded-lg ${verifyResult ? 'bg-green-100 border-2 border-green-500' : 'bg-red-100 border-2 border-red-500'}`}>
                   <p className={`text-lg font-bold ${verifyResult ? 'text-green-700' : 'text-red-700'}`}>
                     {verifyResult 
-                      ? '✅ CODICE VALIDO! Questo è un codice vincente verificato matematicamente.' 
-                      : '❌ CODICE NON VALIDO. Il codice non è valido o non è stato generato correttamente.'}
+                      ? '✅ CODICE VALIDO! Il formato del codice è corretto.' 
+                      : '❌ CODICE NON VALIDO. Il formato del codice non è corretto.'}
                   </p>
                 </div>
               )}
@@ -840,8 +838,77 @@ const AdventCalendar: React.FC = () => {
     );
   };
 
+  const LegendModal: React.FC = () => {
+    return (
+      <div 
+        className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4"
+        onClick={() => setShowLegend(false)}
+      >
+        <div 
+          className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl max-h-[90vh] overflow-y-auto"
+          onClick={(e: React.MouseEvent) => e.stopPropagation()}
+        >
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 flex items-center gap-2">
+              <span className="text-3xl">🎁</span>
+              Premi Disponibili
+            </h2>
+            <button
+              onClick={() => setShowLegend(false)}
+              className="text-gray-500 hover:text-gray-700 text-3xl font-bold"
+            >
+              ×
+            </button>
+          </div>
+
+          <div className="space-y-4 mb-6">
+            {mainPrizes.map((prize, index) => (
+              <div 
+                key={index}
+                className={`bg-gradient-to-r ${prizeColors[prize.type]} rounded-xl p-4 border-2 border-opacity-50 shadow-lg transform transition hover:scale-105 animate-shimmer bg-[length:200%_100%]`}
+              >
+                <div className="flex items-start gap-4">
+                  <div className="text-4xl flex-shrink-0">{prize.emoji}</div>
+                  <div className="flex-1">
+                    <h3 className="text-xl font-bold text-gray-800 mb-1">{prize.name}</h3>
+                    <p className="text-sm text-gray-700 mb-2">{prize.description}</p>
+                    <div className="flex items-center gap-2">
+                      <div className="bg-white bg-opacity-70 px-3 py-1 rounded-full">
+                        <span className="text-xs font-semibold text-gray-700">
+                          {prize.type.replace('MYSTERY_', '')}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 border-2 border-blue-200">
+            <p className="text-sm text-gray-700 text-center">
+              <strong>💡 Come funziona:</strong> Ogni giorno puoi grattare una casella e scoprire se hai vinto una delle Mystery Box! 
+              Più rara è la box, più prezioso è il contenuto! 🎉
+            </p>
+          </div>
+
+          <button
+            onClick={() => setShowLegend(false)}
+            className="w-full mt-6 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-3 rounded-full font-bold text-lg hover:from-purple-600 hover:to-pink-600 transform hover:scale-105 transition-all shadow-lg"
+          >
+            Chiudi
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   if (showAdmin) {
     return <AdminDashboard />;
+  }
+
+  if (showLegend) {
+    return <LegendModal />;
   }
 
   return (
@@ -882,6 +949,14 @@ const AdventCalendar: React.FC = () => {
         .hover-shake:hover {
           animation: shake 0.5s ease-in-out;
         }
+        @keyframes shimmer {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
+        }
+        .animate-shimmer {
+          animation: shimmer 3s linear infinite;
+          background-size: 200% 100%;
+        }
       `}</style>
 
       {[...Array(30)].map((_, i: number) => (
@@ -917,6 +992,13 @@ const AdventCalendar: React.FC = () => {
         title="Dashboard Admin"
       >
         ⚙️
+      </button>
+      <button
+        onClick={() => setShowLegend(true)}
+        className="fixed top-2 right-14 sm:top-4 sm:right-20 bg-gradient-to-r from-purple-600 to-pink-600 text-white p-2 sm:p-3 rounded-full hover:from-purple-700 hover:to-pink-700 active:scale-95 transition shadow-lg z-20 text-xl sm:text-2xl touch-manipulation flex items-center gap-2"
+        title="Legenda Premi"
+      >
+        🎁
       </button>
       <div className="text-center mb-6 sm:mb-8 md:mb-12 relative z-10 px-4">
         <div className="flex items-center justify-center gap-2 sm:gap-3 mb-3 sm:mb-4">
@@ -1004,7 +1086,7 @@ const AdventCalendar: React.FC = () => {
             </div>
 
             <div className="relative mb-4 overflow-hidden rounded-2xl">
-              <div className={`w-full h-[260px] sm:h-[320px] lg:h-[360px] rounded-2xl flex items-center justify-center bg-gradient-to-br ${dayResults[selectedDay]?.color || 'from-gray-400 to-gray-600'} p-2 sm:p-3 overflow-hidden`}>
+              <div className={`w-full h-[260px] sm:h-[320px] lg:h-[360px] rounded-2xl flex items-center justify-center bg-gradient-to-br ${dayResults[selectedDay]?.color || 'from-gray-400 to-gray-600'} p-2 sm:p-3 overflow-hidden ${dayResults[selectedDay]?.type === 'win' ? 'animate-shimmer bg-[length:200%_100%]' : ''}`}>
                 <div className="text-center w-full flex flex-col items-center justify-center gap-1.5 sm:gap-2 py-1 h-full">
                   <div className="text-2xl sm:text-3xl flex-shrink-0">
                     {dayResults[selectedDay]?.type === 'win' ? '🏆' : '😊'}
