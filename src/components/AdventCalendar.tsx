@@ -153,10 +153,10 @@ const AdventCalendar: React.FC = () => {
 
   // Premi principali che si possono vincere con relative probabilità di vincita
   const mainPrizes: { type: string; name: string; emoji: string; description: string; probability: number }[] = [
-    { type: 'MYSTERY_BRONZE', name: 'Mystery Box Bronze', emoji: '📦', description: 'Mystery Box Bronze - Scopri cosa contiene!', probability: 0.20 },
-    { type: 'MYSTERY_SILVER', name: 'Mystery Box Silver', emoji: '📦', description: 'Mystery Box Silver - Scopri cosa contiene!', probability: 0.10 },
-    { type: 'MYSTERY_GOLD', name: 'Mystery Box Gold', emoji: '📦', description: 'Mystery Box Gold - Scopri cosa contiene!', probability: 0.05 },
-    { type: 'MYSTERY_PLATINUM', name: 'Mystery Box Platinum', emoji: '📦', description: 'Mystery Box Platinum - Scopri cosa contiene!', probability: 0.02 }
+    { type: 'MYSTERY_BRONZE', name: 'Mystery Box Bronze', emoji: '📦', description: 'Mystery Box Bronze - Scopri cosa contiene!', probability: 0.027 },
+    { type: 'MYSTERY_SILVER', name: 'Mystery Box Silver', emoji: '📦', description: 'Mystery Box Silver - Scopri cosa contiene!', probability: 0.0135 },
+    { type: 'MYSTERY_GOLD', name: 'Mystery Box Gold', emoji: '📦', description: 'Mystery Box Gold - Scopri cosa contiene!', probability: 0.0068 },
+    { type: 'MYSTERY_PLATINUM', name: 'Mystery Box Platinum', emoji: '📦', description: 'Mystery Box Platinum - Scopri cosa contiene!', probability: 0.0027 }
   ];
 
   // Mappa dei colori per ogni tipo di Mystery Box
