@@ -68,7 +68,7 @@ const AdventCalendar: React.FC = () => {
     21: "Oggi, sii la ragione per cui qualcuno sorride.",
     22: "Il tuo viaggio è unico. Non confrontarlo con quello degli altri.",
     23: "La magia del Natale vive nel tuo cuore generoso.",
-    24: "Sei amato, sei importante, sei necessario. Buon Natale! 🎄"
+    24: "Sei amato, sei importante, sei necessario. 🎄🎅🎁⭐❄️🦌🕯️✨ Buon Natale! Che questo giorno sia pieno di gioia, amore e magia! 🎉🌟💫🎊🎈"
   };
 
   // Genera un codice vincente calcolato (verificabile senza storage)
@@ -173,21 +173,25 @@ const AdventCalendar: React.FC = () => {
   ];
 
   const generateResult = (day: number): Prize => {
-    // Calcola la probabilità totale di vincita (somma di tutte le probabilità dei premi)
-    const totalWinProbability: number = mainPrizes.reduce((sum, prize) => sum + prize.probability, 0);
+    // Probabilità totale di vincita: 98% per il giorno 24, 0.5% per gli altri giorni
+    const totalWinProbability: number = day === 24 ? 0.98 : 0.005;
     
     const random: number = Math.random();
     const isWin: boolean = random < totalWinProbability;
     
     if (isWin) {
       // Seleziona un premio in base alle probabilità pesate
+      // Calcola la somma delle probabilità originali per scalare
+      const originalTotalProbability: number = mainPrizes.reduce((sum, prize) => sum + prize.probability, 0);
+      const scaleFactor: number = totalWinProbability / originalTotalProbability;
+      
       let cumulativeProbability: number = 0;
       const randomPrize: number = Math.random() * totalWinProbability;
       
       let selectedPrize = mainPrizes[0]; // Default al primo premio
       
       for (const prize of mainPrizes) {
-        cumulativeProbability += prize.probability;
+        cumulativeProbability += prize.probability * scaleFactor;
         if (randomPrize <= cumulativeProbability) {
           selectedPrize = prize;
           break;
